@@ -29,7 +29,39 @@ export interface Settings {
   historyOff: string[]
   /** Keep a hidden window ready, so the next one opens at once. Uses about 180 MB more memory while ready. */
   warmWindow: boolean
+  /** Links that come from a terminal or a code editor open in a small window, with no keys needed. */
+  terminalLinksSmallWindow: boolean
+  /** Size of a collapsed pin (the circle), in points. The same as the Collapse button in the toolbar. */
+  pinSize: number
+  /** The most pins that can exist at once. Each pin window costs about 80 MB. */
+  maxPins: number
+  /** Offload pins that were not used for a while. Off by default. */
+  autoOffloadInactivity: boolean
+  autoOffloadMinutes: number
+  /** Offload the least recently used pins when the app uses too much memory. Off by default. */
+  autoOffloadMemory: boolean
+  autoOffloadMemoryGB: number
+  /** When memory is over the limit, ask before offloading (on), or offload without asking (off). */
+  memoryAsk: boolean
 }
+
+/** The pin sizes the user can choose: three smaller and three larger than the default (28). */
+export const PIN_SIZES: ReadonlyArray<{ label: string; value: number }> = [
+  { label: 'Smallest', value: 19 },
+  { label: 'Smaller', value: 22 },
+  { label: 'Small', value: 25 },
+  { label: 'Default', value: 28 },
+  { label: 'Large', value: 31 },
+  { label: 'Larger', value: 34 },
+  { label: 'Largest', value: 37 }
+]
+
+export const PIN_LIMITS = {
+  size: { min: 19, max: 37 },
+  maxPins: { min: 4, max: 40 },
+  minutes: { min: 5, max: 240 },
+  memoryGB: { min: 0.5, max: 8 }
+} as const
 
 export const DEFAULT_SETTINGS: Settings = {
   hotkey: 'Control+Alt+Space',
@@ -51,7 +83,15 @@ export const DEFAULT_SETTINGS: Settings = {
   diaProfiles: [],
   showHistory: true,
   historyOff: [],
-  warmWindow: true
+  warmWindow: true,
+  terminalLinksSmallWindow: true,
+  pinSize: 28, // the same size as the Collapse button in the toolbar
+  maxPins: 12,
+  autoOffloadInactivity: false,
+  autoOffloadMinutes: 30,
+  autoOffloadMemory: false,
+  autoOffloadMemoryGB: 1.5,
+  memoryAsk: true
 }
 
 export const SEARCH_ENGINES: ReadonlyArray<{ name: string; template: string }> = [
@@ -106,6 +146,17 @@ export function mergeSettings(raw: unknown): Settings {
       : d.diaProfiles,
     showHistory: bool(r.showHistory, d.showHistory),
     warmWindow: bool(r.warmWindow, d.warmWindow),
+    terminalLinksSmallWindow: bool(r.terminalLinksSmallWindow, d.terminalLinksSmallWindow),
+    pinSize: clampNumber(r.pinSize, d.pinSize, PIN_LIMITS.size.min, PIN_LIMITS.size.max),
+    maxPins: clampNumber(r.maxPins, d.maxPins, PIN_LIMITS.maxPins.min, PIN_LIMITS.maxPins.max),
+    autoOffloadInactivity: bool(r.autoOffloadInactivity, d.autoOffloadInactivity),
+    autoOffloadMinutes: clampNumber(r.autoOffloadMinutes, d.autoOffloadMinutes, PIN_LIMITS.minutes.min, PIN_LIMITS.minutes.max),
+    autoOffloadMemory: bool(r.autoOffloadMemory, d.autoOffloadMemory),
+    memoryAsk: bool(r.memoryAsk, d.memoryAsk),
+    autoOffloadMemoryGB:
+      typeof r.autoOffloadMemoryGB === 'number' && Number.isFinite(r.autoOffloadMemoryGB)
+        ? Math.min(Math.max(Math.round(r.autoOffloadMemoryGB * 10) / 10, PIN_LIMITS.memoryGB.min), PIN_LIMITS.memoryGB.max)
+        : d.autoOffloadMemoryGB,
     historyOff: Array.isArray(r.historyOff) ? r.historyOff.filter((n): n is string => typeof n === 'string' && n !== '').slice(0, 50) : d.historyOff
   }
 }

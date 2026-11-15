@@ -21,6 +21,8 @@ button, input, .address { -webkit-app-region: no-drag; }
 .icon:active:not(:disabled) { background: var(--press); transform: scale(0.93); }
 .icon:disabled { opacity: 0.32; cursor: default; }
 .icon.on { background: var(--accent-soft); color: var(--accent); }
+/* The Collapse button is the size of a pin (28), so the pin takes its place without a jump. */
+#collapse { width: 28px; height: 28px; }
 .icon.on svg { transform: rotate(-12deg); }
 #reload:hover:not(:disabled) svg { transform: rotate(90deg); }
 #send:hover svg { transform: translate(1px, -1px); }

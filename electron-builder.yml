@@ -2,7 +2,8 @@ appId: io.github.phantom-456.instantbrowser
 productName: Instant Browser
 copyright: Instant Browser
 directories:
-  output: dist
+  # The name ends with .noindex so Spotlight does not list the app copies in it.
+  output: dist.noindex
   buildResources: build
 files:
   - out/**

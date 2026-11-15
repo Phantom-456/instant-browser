@@ -16,7 +16,7 @@ mountIcons()
 const back = el<HTMLButtonElement>('back')
 const forward = el<HTMLButtonElement>('forward')
 const reload = el<HTMLButtonElement>('reload')
-const pin = el<HTMLButtonElement>('pin')
+const collapse = el<HTMLButtonElement>('collapse')
 const follow = el<HTMLButtonElement>('follow')
 const send = el<HTMLButtonElement>('send')
 const pick = el<HTMLButtonElement>('pick')
@@ -31,7 +31,7 @@ const error = el<HTMLDivElement>('error')
 back.onclick = () => api.action({ type: 'back' })
 forward.onclick = () => api.action({ type: 'forward' })
 reload.onclick = () => api.action({ type: 'reload' })
-pin.onclick = () => api.action({ type: 'pin' })
+collapse.onclick = () => api.action({ type: 'collapse' })
 follow.onclick = () => api.action({ type: 'follow' })
 send.onclick = () => api.action({ type: 'send' })
 pick.onclick = () => api.action({ type: 'pick-browser' })
@@ -57,10 +57,8 @@ api.onState((state) => {
   document.title = state.title
   back.disabled = !state.canGoBack
   forward.disabled = !state.canGoForward
-  pin.classList.toggle('on', state.pinned)
   follow.classList.toggle('on', state.following)
   follow.title = state.following ? 'Following you to other desktops. Click to stay on this desktop.' : 'Follow me to other desktops'
-  pin.title = state.pinned ? 'On top of other apps. Click to let it go behind.' : 'Keep this window above other apps'
   reload.innerHTML = state.loading ? ICONS.stop! : ICONS.reload!
   reload.title = state.loading ? 'Stop' : 'Reload'
   lock.hidden = state.loading || !isSecureUrl(state.url) // while loading, the spinner takes the place of the lock

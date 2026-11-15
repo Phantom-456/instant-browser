@@ -9,6 +9,7 @@ interface InstantSearch {
   resize(height: number): void
   query(text: string): Promise<BarResults>
   openSettings(section: string): void
+  openManager(): void
   onHistoryChanged(callback: () => void): void
 }
 const api = (window as unknown as { instantSearch: InstantSearch }).instantSearch
@@ -187,6 +188,10 @@ api.onShow(() => {
 })
 
 input.addEventListener('keydown', (event) => {
+  // The same as the bubbles beside the bar: Cmd+, opens Settings, Cmd+Shift+P opens the Pin Manager.
+  const mod = event.metaKey || event.ctrlKey
+  if (mod && event.key === ',') { event.preventDefault(); api.openSettings('General'); return }
+  if (mod && event.shiftKey && event.key.toLowerCase() === 'p') { event.preventDefault(); api.openManager(); return }
   if (event.key === 'ArrowDown' && flat.length) {
     event.preventDefault()
     select(selected + 1 >= flat.length ? -1 : selected + 1)

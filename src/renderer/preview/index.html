@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src data:; style-src 'self'" />
+    <title>Saved preview</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <img id="shot" alt="" hidden />
+    <div id="bar" role="status" aria-live="polite">
+      <span id="dot"></span>
+      <span id="text"></span>
+      <span id="buttons" hidden>
+        <button id="retry" type="button">Retry</button>
+        <button id="cancel" type="button">Cancel</button>
+      </span>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

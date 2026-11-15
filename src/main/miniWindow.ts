@@ -1,5 +1,5 @@
-import { BaseWindow, WebContentsView, dialog, ipcMain, nativeTheme, screen, shell, type Input, type WebContents } from 'electron'
-import { TOOLBAR_ACTION, TOOLBAR_STATE, type ToolbarAction, type ToolbarState } from '../shared/ipc'
+import { BaseWindow, WebContentsView, dialog, ipcMain, nativeTheme, screen, shell, systemPreferences, type Input, type WebContents } from 'electron'
+import { PREVIEW_ACTION, PREVIEW_STATE, TOOLBAR_ACTION, TOOLBAR_STATE, type PreviewAction, type PreviewState, type ToolbarAction, type ToolbarState } from '../shared/ipc'
 import { httpFallback } from '../shared/httpsFirst'
 import { placeNear } from '../shared/placement'
 import { resolveInput } from '../shared/resolveInput'
@@ -7,16 +7,40 @@ import { isAllowedUrl } from '../shared/urlPolicy'
 import { preloadPath, rendererPage } from './searchBar'
 import type { SettingsFile } from './settingsFile'
 import { perf } from './perf'
-import { allowHttpFor, getWebSession, wasUpgraded } from './webSession'
+import { allowHttpFor, getWebSession, hasRunningDownload, wasUpgraded } from './webSession'
 
 const TOOLBAR_HEIGHT = 48
 /** Space between the page and the window edge: the glass frame around the page. */
 const FRAME = 6
+/** How long a window takes to shrink into its pin, and to grow out of it. Slow on purpose; short when the system asks for Reduce Motion. */
+const FULL_COLLAPSE_MS = 600
+const collapseMs = (): number => {
+  try { return systemPreferences.getAnimationSettings().prefersReducedMotion ? 120 : FULL_COLLAPSE_MS } catch { return FULL_COLLAPSE_MS }
+}
 /** A ready (hidden) window is let go after this long without use. */
 const IDLE_RELEASE_MS = 10 * 60_000
 
 function pageBackground(): string {
   return nativeTheme.shouldUseDarkColors ? '#1c1c1f' : '#ffffff'
+}
+
+type R = { x: number; y: number; width: number; height: number }
+const lerpRect = (a: R, b: R, t: number): R => {
+  const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2 // ease in and out
+  const k = (x: number, y: number) => Math.round(x + (y - x) * e)
+  return { x: k(a.x, b.x), y: k(a.y, b.y), width: Math.max(1, k(a.width, b.width)), height: Math.max(1, k(a.height, b.height)) }
+}
+
+/** Run `step(t)` for t from 0 to 1 over `ms`, about 60 times a second. */
+function animate(ms: number, step: (t: number) => void): Promise<void> {
+  return new Promise((resolve) => {
+    const start = Date.now()
+    const timer = setInterval(() => {
+      const t = Math.min(1, (Date.now() - start) / ms)
+      try { step(t) } catch { /* the window was closed while it moved */ }
+      if (t >= 1) { clearInterval(timer); resolve() }
+    }, 16)
+  })
 }
 
 export interface MiniWindowDeps {
@@ -27,9 +51,52 @@ export interface MiniWindowDeps {
   onPickBrowser: (url: string, done: () => void) => void
   /** Open the settings window. */
   onOpenSettings: () => void
+  /** The Collapse button was pressed. The window is not hidden yet: the pin manager decides. */
+  onCollapse?: (handle: MiniHandle, info: MiniInfo) => void
 }
 
+/** What the pin manager needs to know about a window. */
+export interface MiniInfo {
+  url: string
+  title: string
+  bounds: { x: number; y: number; width: number; height: number }
+  following: boolean
+}
+/** A picture of a page and what is needed to bring it back later. */
+export interface MiniSnapshot {
+  png: Buffer
+  scroll: { x: number; y: number } | null
+  /** The user typed text in a field and did not send it. */
+  unsentText: boolean
+  title: string
+  url: string
+}
+
+export interface OpenFromPin {
+  url: string
+  /** Where the window grows from (the pin's centre), how big the pin is, and where the window ends up. */
+  from: { x: number; y: number }
+  size: number
+  to: { x: number; y: number; width: number; height: number }
+  following: boolean
+  preview: { dataUrl: string; takenAt: number } | null
+  scroll: { x: number; y: number } | null
+  /** The live page has loaded. */
+  onLoaded: () => void
+  /** The user pressed Cancel after a failed load. The window is already closed. */
+  onCancel: () => void
+}
+
+/** An opaque reference to one mini window, for the pin manager. */
+export type MiniHandle = MiniWindow
+
 interface MiniWindow {
+  /** A number for the manager list. */
+  id: number
+  /** Hidden because it was collapsed to a pin. The page stays alive. */
+  collapsed: boolean
+  /** The saved preview that covers the page while an offloaded pin loads again. */
+  preview: WebContentsView | null
   win: BaseWindow
   toolbar: WebContentsView
   page: WebContentsView
@@ -54,6 +121,8 @@ function currentUrl(mini: { page: WebContentsView; pendingUrl: string }): string
   return now && now !== 'about:blank' ? now : mini.pendingUrl
 }
 
+let nextMiniId = 0
+
 export class MiniWindowManager {
   private readonly byToolbarId = new Map<number, MiniWindow>()
 
@@ -70,10 +139,32 @@ export class MiniWindowManager {
   private lastActivity = Date.now()
   private disposed = false
 
+  /** The open windows (not pins, not the hidden spare), for the manager list. */
+  listOpen(): Array<{ id: number; title: string; url: string }> {
+    const out: Array<{ id: number; title: string; url: string }> = []
+    for (const mini of this.byToolbarId.values()) {
+      if (mini === this.spare || mini.collapsed || mini.win.isDestroyed() || !mini.win.isVisible()) continue
+      out.push({ id: mini.id, title: mini.page.webContents.getTitle(), url: currentUrl(mini) })
+    }
+    return out
+  }
+
+  showWindow(id: number): void {
+    for (const mini of this.byToolbarId.values()) {
+      if (mini.id === id && !mini.win.isDestroyed() && !mini.collapsed) { mini.win.show(); mini.win.focus(); return }
+    }
+  }
+
+  closeWindow(id: number): void {
+    for (const mini of this.byToolbarId.values()) {
+      if (mini.id === id && !mini.win.isDestroyed() && !mini.collapsed) { mini.win.close(); return }
+    }
+  }
+
   /** Windows the user can see. The hidden spare one is not counted. */
   count(): number {
     let n = 0
-    for (const mini of this.byToolbarId.values()) if (mini !== this.spare) n++
+    for (const mini of this.byToolbarId.values()) if (mini !== this.spare && !mini.collapsed) n++
     return n
   }
 
@@ -179,15 +270,17 @@ export class MiniWindowManager {
     const layout = () => {
       const { width, height } = win.getContentBounds()
       toolbar.setBounds({ x: 0, y: 0, width, height: TOOLBAR_HEIGHT })
-      page.setBounds({
+      const pageBounds = {
         x: FRAME,
         y: TOOLBAR_HEIGHT,
         width: Math.max(0, width - FRAME * 2),
         height: Math.max(0, height - TOOLBAR_HEIGHT - FRAME)
-      })
+      }
+      page.setBounds(pageBounds)
+      mini.preview?.setBounds(pageBounds)
     }
     const mini: MiniWindow = {
-      win, toolbar, page, layout,
+      win, toolbar, page, layout, id: ++nextMiniId, collapsed: false, preview: null,
       pinned: settings.alwaysOnTop, following: false, error: null,
       pendingUrl: '', starting: false, ignoreResizeUntil: 0
     }
@@ -312,6 +405,227 @@ export class MiniWindowManager {
     mini.win.setVisibleOnAllWorkspaces(mini.following, { visibleOnFullScreen: true })
   }
 
+  // ---- Used by the pin manager ----
+
+  infoOf(mini: MiniHandle): MiniInfo {
+    return { url: currentUrl(mini), title: mini.page.webContents.getTitle(), bounds: mini.win.getBounds(), following: mini.following }
+  }
+
+  /** Where the Collapse button is on screen (its centre). The pin takes its place, so it stays where the user clicked. */
+  async collapseButtonCentre(mini: MiniHandle): Promise<{ x: number; y: number } | null> {
+    try {
+      const rect = (await mini.toolbar.webContents.executeJavaScript(
+        "(() => { const r = document.getElementById('collapse')?.getBoundingClientRect(); return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null })()"
+      )) as { x: number; y: number } | null
+      if (!rect) return null
+      const content = mini.win.getContentBounds()
+      return { x: Math.round(content.x + rect.x), y: Math.round(content.y + rect.y) }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * The whole window shrinks, slowly, into the pin at `centre` (the circle is `size` wide), then it is hidden. Its page
+   * stays alive in memory. The window gets its old size back while hidden, so Restore knows where to grow it again.
+   */
+  async collapseInto(mini: MiniHandle, centre: { x: number; y: number }, size: number): Promise<void> {
+    const win = mini.win
+    if (win.isDestroyed()) return
+    const from = win.getBounds()
+    const to = { x: Math.round(centre.x - size / 2), y: Math.round(centre.y - size / 2), width: size, height: size }
+    mini.collapsed = true // it no longer counts as an open window
+    mini.ignoreResizeUntil = Date.now() + collapseMs() + 1000
+    win.setMinimumSize(1, 1)
+    await animate(collapseMs(), (t) => {
+      if (win.isDestroyed()) return
+      win.setBounds(lerpRect(from, to, t))
+      win.setOpacity(t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3)
+    })
+    if (win.isDestroyed()) return
+    win.hide()
+    win.setBounds(from)
+    win.setMinimumSize(320, 240)
+    win.setOpacity(1)
+  }
+
+  /** Show a collapsed window again: it grows out of the pin to the size and place it had, with the page as it was. */
+  async reveal(mini: MiniHandle, following: boolean, from: { x: number; y: number }, to: { x: number; y: number; width: number; height: number }, size: number): Promise<void> {
+    if (mini.win.isDestroyed()) return
+    mini.following = following
+    this.applyPin(mini)
+    this.pushState(mini)
+    await this.grow(mini, from, to, size)
+    mini.page.webContents.focus()
+  }
+
+  /** The window grows from a small box at `from` to `to`. */
+  private async grow(mini: MiniWindow, from: { x: number; y: number }, to: R, size: number): Promise<void> {
+    const win = mini.win
+    const start = { x: Math.round(from.x - size / 2), y: Math.round(from.y - size / 2), width: size, height: size }
+    mini.ignoreResizeUntil = Date.now() + collapseMs() + 1000
+    win.setMinimumSize(1, 1)
+    win.setOpacity(0)
+    win.setBounds(start)
+    win.show()
+    await animate(collapseMs(), (t) => {
+      if (win.isDestroyed()) return
+      win.setBounds(lerpRect(start, to, t))
+      win.setOpacity(Math.min(1, t / 0.3))
+    })
+    if (win.isDestroyed()) return
+    win.setBounds(to)
+    win.setMinimumSize(320, 240)
+    win.setOpacity(1)
+    mini.collapsed = false
+  }
+
+  /**
+   * A picture of the page and what Offload must know before it lets the page go: the scroll position, the title,
+   * and whether the user typed text that was not sent. Works on a hidden window too.
+   */
+  async captureSnapshot(mini: MiniHandle): Promise<MiniSnapshot> {
+    const wc = mini.page.webContents
+    const image = await wc.capturePage()
+    const png = image.toPNG()
+    if (image.isEmpty() || png.length === 0) throw new Error('The page gave no picture')
+    let scroll: { x: number; y: number } | null = null
+    let unsentText = false
+    try {
+      const info = (await wc.executeJavaScript(
+        `(() => ({ x: window.scrollX, y: window.scrollY, unsent: Array.from(document.querySelectorAll('input, textarea')).some((e) => { const t = (e.type || '').toLowerCase(); if (['hidden', 'checkbox', 'radio', 'button', 'submit', 'reset', 'file', 'image'].includes(t)) return false; return (e.value || '') !== (e.defaultValue || '') }) }))()`
+      )) as { x: number; y: number; unsent: boolean }
+      scroll = { x: info.x, y: info.y }
+      unsentText = info.unsent
+    } catch { /* a page that cannot be asked: no scroll, no warning */ }
+    return { png, scroll, unsentText, title: wc.getTitle(), url: currentUrl(mini) }
+  }
+
+  /** Is sound playing from this page? */
+  isAudible(mini: MiniHandle): boolean {
+    return !mini.win.isDestroyed() && mini.page.webContents.isCurrentlyAudible()
+  }
+
+  /** Is a download from this page still running? */
+  isDownloading(mini: MiniHandle): boolean {
+    return !mini.win.isDestroyed() && hasRunningDownload(mini.page.webContents.id)
+  }
+
+  /**
+   * Open a window for an offloaded pin: it grows out of the pin, shows the saved preview over the page, loads the address
+   * again and fades the preview out when the page is there. Scroll is put back. Retry and Cancel show if the load fails.
+   */
+  openFromPin(opts: OpenFromPin): MiniHandle {
+    this.lastActivity = Date.now()
+    const mini = this.spare ?? this.create(false)
+    this.spare = null
+    mini.collapsed = true
+    mini.following = opts.following
+    mini.pinned = this.deps.settings.get().alwaysOnTop
+    this.applyPin(mini)
+    mini.page.setBackgroundColor(pageBackground())
+    mini.pendingUrl = opts.url
+    mini.starting = true
+    mini.error = null
+    this.pushState(mini)
+
+    // The saved preview: a picture on top of the page. It is shown first, so the window is never blank.
+    let overlay: WebContentsView | null = null
+    const send = (state: PreviewState) => { if (overlay && !overlay.webContents.isDestroyed()) overlay.webContents.send(PREVIEW_STATE, state) }
+    const state: PreviewState = { image: opts.preview?.dataUrl ?? null, takenAt: opts.preview?.takenAt ?? null, status: 'updating', message: '' }
+    if (opts.preview) {
+      overlay = new WebContentsView({ webPreferences: { preload: preloadPath('preview'), sandbox: true, contextIsolation: true, nodeIntegration: false } })
+      overlay.setBorderRadius(12)
+      mini.preview = overlay
+      mini.win.contentView.addChildView(overlay)
+      mini.layout()
+      const view = rendererPage('preview')
+      const first = () => send(state)
+      overlay.webContents.once('did-finish-load', first)
+      if (view.url) void overlay.webContents.loadURL(view.url)
+      else if (view.file) void overlay.webContents.loadFile(view.file)
+    }
+    const removeOverlay = () => {
+      const o = overlay
+      overlay = null
+      mini.preview = null
+      if (!o) return
+      try { mini.win.contentView.removeChildView(o) } catch { /* the window is gone */ }
+      if (!o.webContents.isDestroyed()) o.webContents.close()
+    }
+
+    const wc = mini.page.webContents
+    let slowTimer: ReturnType<typeof setTimeout> | null = null
+    let finished = false
+    const clear = () => {
+      if (slowTimer) clearTimeout(slowTimer)
+      slowTimer = null
+      wc.removeListener('did-finish-load', onLoaded)
+      wc.removeListener('did-fail-load', onFailed)
+      ipcMain.removeListener(PREVIEW_ACTION, onAction)
+    }
+    const start = () => {
+      state.status = 'updating'
+      send(state)
+      if (slowTimer) clearTimeout(slowTimer)
+      slowTimer = setTimeout(() => { state.status = 'slow'; send(state) }, 8000)
+      if (wc.isLoading()) wc.stop()
+      void wc.loadURL(opts.url).catch(() => {})
+    }
+    const onLoaded = () => {
+      if (finished) return
+      finished = true
+      clear()
+      if (opts.scroll) void wc.executeJavaScript(`window.scrollTo(${Math.round(opts.scroll.x)}, ${Math.round(opts.scroll.y)})`).catch(() => {})
+      state.status = 'done'
+      send(state) // the preview fades out
+      setTimeout(removeOverlay, 220)
+      opts.onLoaded()
+    }
+    const onFailed = (_e: unknown, code: number, description: string, _url: string, isMainFrame: boolean) => {
+      if (!isMainFrame || code === -3 || finished) return
+      if (slowTimer) clearTimeout(slowTimer)
+      state.status = 'failed'
+      state.message = `The page did not load (${description}).`
+      send(state)
+    }
+    const onAction = (event: Electron.IpcMainEvent, action: PreviewAction) => {
+      if (!overlay || event.sender !== overlay.webContents || !action) return
+      if (action.type === 'retry') start()
+      else if (action.type === 'cancel') {
+        finished = true
+        clear()
+        removeOverlay()
+        this.discard(mini)
+        opts.onCancel()
+      }
+    }
+    wc.on('did-finish-load', onLoaded)
+    wc.on('did-fail-load', onFailed)
+    ipcMain.on(PREVIEW_ACTION, onAction)
+    mini.win.once('closed', () => { clear(); finished = true })
+    start()
+    void this.grow(mini, opts.from, opts.to, opts.size).then(() => { if (!mini.win.isDestroyed()) wc.focus() })
+    return mini
+  }
+
+  /** Follow on or off for a window that may be hidden (the pin's Follow button). */
+  setFollowing(mini: MiniHandle, following: boolean): void {
+    mini.following = following
+    if (!mini.win.isDestroyed()) {
+      this.applyPin(mini)
+      this.pushState(mini)
+    }
+  }
+
+  isAlive(mini: MiniHandle): boolean { return !mini.win.isDestroyed() }
+
+  /** Close a window for good (Remove, or Offload when it frees the page). */
+  discard(mini: MiniHandle): void {
+    mini.collapsed = false
+    if (!mini.win.isDestroyed()) mini.win.close()
+  }
+
   private pushState(mini: MiniWindow): void {
     if (mini.win.isDestroyed()) return
     const wc = mini.page.webContents
@@ -320,7 +634,6 @@ export class MiniWindowManager {
       title: wc.getTitle(),
       canGoBack: wc.navigationHistory.canGoBack(),
       canGoForward: wc.navigationHistory.canGoForward(),
-      pinned: mini.pinned,
       following: mini.following,
       loading: wc.isLoading() || mini.starting,
       error: mini.error
@@ -347,10 +660,8 @@ export class MiniWindowManager {
         if (url) void wc.loadURL(url)
         break
       }
-      case 'pin':
-        mini.pinned = !mini.pinned
-        this.applyPin(mini)
-        this.pushState(mini)
+      case 'collapse':
+        if (isAllowedUrl(currentUrl(mini))) this.deps.onCollapse?.(mini, this.infoOf(mini))
         break
       case 'follow':
         mini.following = !mini.following

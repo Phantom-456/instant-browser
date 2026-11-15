@@ -4,7 +4,7 @@ import { SETTINGS_SECTIONS } from '../../shared/bubbles'
 import { DIA_ID } from '../../shared/dia'
 import { LINK_KEY_PRESETS } from '../../shared/linkRouter'
 import { updateLabel } from '../../shared/updateLabel'
-import type { Settings } from '../../shared/settings'
+import { PIN_SIZES, type Settings } from '../../shared/settings'
 import { ICONS } from '../shared/icons'
 
 interface Api {
@@ -24,6 +24,7 @@ const SECTION_ICONS: Record<Section, string> = {
   General: 'general',
   'Search engine': 'search',
   Appearance: 'appearance',
+  Pins: 'collapse',
   'Privacy and security': 'privacy',
   'Site permissions': 'permissions',
   Downloads: 'downloads',
@@ -143,6 +144,22 @@ function hotkeyRow(): HTMLElement {
   )
 }
 
+/** After "Make default", macOS asks the user. Look again a few times, so the page shows the answer. */
+function refreshSoon(): void {
+  for (const ms of [1500, 4000, 9000]) setTimeout(() => void api.get().then((fresh) => { view = fresh; render() }), ms)
+}
+
+function defaultBrowserRow(): HTMLElement {
+  const note = view.defaultBrowser
+  const buttons = node('div', { className: 'hotkey' })
+  if (note.canMakeDefault) buttons.append(button('Make default', () => { void act({ type: 'make-default-browser' }); refreshSoon() }))
+  buttons.append(button('Open system settings', () => void act({ type: 'open-default-browser-settings' })))
+  const line = row('Default browser', note.text, buttons)
+  // Only the warning is red; the explanation stays normal.
+  if (note.warning) line.querySelector('.text')?.append(node('div', { className: 'hint warn' }, note.warning))
+  return line
+}
+
 function sectionRows(section: Section): HTMLElement[] {
   const s = view.settings
   switch (section) {
@@ -154,15 +171,15 @@ function sectionRows(section: Section): HTMLElement[] {
         row('Main browser', 'Where "send to browser" opens pages.',
           select(view.browsers.map((b) => ({ label: b.name, value: b.id })), s.mainBrowserId ?? view.browsers[0]?.id ?? '', (mainBrowserId) => void save({ mainBrowserId }))),
         ...(view.browsers.some((b) => b.id === DIA_ID) ? [diaProfileRow()] : []),
-        row('Default browser', 'Links you click in other apps open in a small window. You choose this in the system settings.',
-          button('Open system settings', () => void act({ type: 'open-default-browser-settings' }))),
+        defaultBrowserRow(),
         row('Link router',
           view.isDefaultBrowser
             ? 'Active. Links you click in other apps go to your main browser. Hold the keys below while you click to open the link in a small window instead.'
             : 'Not active yet. It works only while Instant Browser is your default browser. Links open in a small window until then.',
           toggle('linkRouter')),
         row('Keys for a small window', 'Hold these keys while you click a link in another app.',
-          select(LINK_KEY_PRESETS.map((p) => ({ label: p.label, value: p.id })), s.linkRouterKeys, (linkRouterKeys) => void save({ linkRouterKeys })))
+          select(LINK_KEY_PRESETS.map((p) => ({ label: p.label, value: p.id })), s.linkRouterKeys, (linkRouterKeys) => void save({ linkRouterKeys }))),
+        row('Links from terminals and code editors', 'They open in a small window, with no keys needed. It covers Terminal, iTerm, Warp, Ghostty, VS Code and similar apps, and suits sign-in pages from commands such as "gh auth login". Passkeys and security keys may not work in the small window.', toggle('terminalLinksSmallWindow'))
       ]
     case 'Search engine': {
       const known = view.engines.some((e) => e.template === s.searchTemplate)
@@ -180,9 +197,29 @@ function sectionRows(section: Section): HTMLElement[] {
       return [
         row('New window width', 'In pixels, 320 to 2000.', numberBox(s.windowSize.width, 320, 2000, 10, (width) => void save({ windowSize: { ...s.windowSize, width } }))),
         row('New window height', 'In pixels, 240 to 2000.', numberBox(s.windowSize.height, 240, 2000, 10, (height) => void save({ windowSize: { ...s.windowSize, height } }))),
-        row('Keep new windows on top', 'Each window also has its own pin button.', toggle('alwaysOnTop')),
+        row('Keep new windows on top', 'Windows stay above other apps until you collapse them to a pin. Pins always float.', toggle('alwaysOnTop')),
         row('Page zoom', '1 is normal size. 0.5 to 3.', numberBox(s.defaultZoom, 0.5, 3, 0.1, (defaultZoom) => void save({ defaultZoom })))
       ]
+    case 'Pins': {
+      // The size on offer that is closest to the saved one.
+      const nearest = PIN_SIZES.reduce((a, b) => (Math.abs(b.value - s.pinSize) < Math.abs(a.value - s.pinSize) ? b : a))
+      return [
+        row('Pin size', 'How big a pin is on the desktop. Default is the size of the pin button in the toolbar.',
+          select(PIN_SIZES.map((p) => ({ label: p.label, value: String(p.value) })), String(nearest.value), (value) => void save({ pinSize: Number(value) }))),
+        row('Most pins at once', `4 to 40. Every pin is its own small window and uses about 80 MB of memory, even after Offload. With ${s.maxPins} pins that is about ${s.maxPins * 80} MB.`,
+          numberBox(s.maxPins, 4, 40, 1, (maxPins) => void save({ maxPins }))),
+        row('Offload pins I have not used', 'Offload releases the memory of a collapsed page. The pin stays and the page loads again when you open it. A ring on the Offload bubble shows the time left. Click that bubble to pause it (the page then stays in memory). Right-click to go on.',
+          toggle('autoOffloadInactivity')),
+        row('Minutes without use', '5 to 240. Starts when you collapse a window, and starts again when you open it.',
+          numberBox(s.autoOffloadMinutes, 5, 240, 5, (autoOffloadMinutes) => void save({ autoOffloadMinutes }))),
+        row('Offload when memory is high', 'When Instant Browser uses more memory than the limit, the oldest pins are offloaded first, until it uses about 80 percent of the limit. Pins with a paused countdown, pins that play sound and pages with a download are skipped. Offload frees the page, but the pin windows and the app itself still use memory.',
+          toggle('autoOffloadMemory')),
+        row('Memory limit (GB)', '0.5 to 8. The memory of the whole app, all its windows and pages together.',
+          numberBox(s.autoOffloadMemoryGB, 0.5, 8, 0.5, (autoOffloadMemoryGB) => void save({ autoOffloadMemoryGB }))),
+        row('Ask before offloading', 'When memory is over the limit, show a small notice that asks whether to offload some pins. Turn this off to offload without asking.',
+          toggle('memoryAsk'))
+      ]
+    }
     case 'Privacy and security':
       return [
         row('Always use secure connections', 'Try https first. Ask before opening a site that only has http.', toggle('httpsFirst')),

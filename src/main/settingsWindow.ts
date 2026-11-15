@@ -20,7 +20,8 @@ import type { OwnHistory } from './ownHistory'
 import type { PermissionFile } from './permissionFile'
 import { preloadPath, rendererPage } from './searchBar'
 import type { SettingsFile } from './settingsFile'
-import { isDefaultBrowser } from './heldKeys'
+import { describeDefaultBrowser } from '../shared/defaultBrowser'
+import { currentWebLinkApp, isDefaultBrowser, isTestMode } from './heldKeys'
 import { getWebSession } from './webSession'
 
 export interface SettingsWindowDeps {
@@ -126,6 +127,13 @@ export class SettingsWindow {
       about: { app: app.getVersion(), electron: process.versions.electron, chromium: process.versions.chrome },
       platform: process.platform,
       isDefaultBrowser: isDefaultBrowser(),
+      defaultBrowser: describeDefaultBrowser({
+        platform: process.platform,
+        isDefault: isDefaultBrowser(),
+        currentApp: currentWebLinkApp(),
+        packaged: app.isPackaged || (isTestMode() && process.env.INSTANT_TEST_PACKAGED === '1'),
+        inApplicationsFolder: process.platform !== 'darwin' || app.getPath('exe').startsWith('/Applications/')
+      }),
       diaProfiles: live ?? this.deps.settings.get().diaProfiles,
       diaProfilesLive: live !== null,
       historySources: availableSources(),
@@ -166,6 +174,14 @@ export class SettingsWindow {
         break
       case 'hotkey-record-cancel':
         this.stopRecording()
+        break
+      case 'make-default-browser':
+        // The user clicked the button. macOS then asks the user to confirm; nothing changes until they do.
+        if (isTestMode()) console.log('[instant] make default requested')
+        else if (app.isPackaged && process.platform === 'darwin') {
+          app.setAsDefaultProtocolClient('http')
+          app.setAsDefaultProtocolClient('https')
+        }
         break
       case 'check-updates':
         this.deps.updater.checkNow()

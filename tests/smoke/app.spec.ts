@@ -88,7 +88,7 @@ test('Cmd+, in a mini window opens settings, and changes are applied and saved',
   expect(await registered('Control+Alt+Space')).toBe(false)
 
   // The page shows the sections.
-  await expect(page.locator('nav button')).toHaveCount(7)
+  await expect(page.locator("nav button")).toHaveCount(8)
 })
 
 test('hotkey recorder: Change, press new keys, it is saved and active', async () => {
@@ -574,4 +574,88 @@ test('quitting while the history is being read gives no error', async () => {
   await quitting.close() // quit while the other process is still reading
   await new Promise((r) => setTimeout(r, 1500))
   expect(messages.join('')).not.toMatch(/Uncaught Exception|Object has been destroyed/)
+})
+
+test.describe('links from terminals, and the default browser note', () => {
+  const FIXED = JSON.stringify([{ id: 'company.thebrowser.dia', name: 'Dia' }, { id: 'com.google.Chrome', name: 'Google Chrome' }])
+
+  async function start(env: Record<string, string>, settings: object = {}) {
+    const userData = mkdtempSync(join(tmpdir(), 'ib-term-'))
+    writeFileSync(join(userData, 'settings.json'), JSON.stringify(settings))
+    const logs: string[] = []
+    const launched = await electron.launch({
+      args: ['.', `--user-data-dir=${userData}`, `${base}/`],
+      env: { ...process.env, INSTANT_TEST: '1', INSTANT_TEST_MASK: '0', INSTANT_TEST_BROWSERS: FIXED, ...env } as Record<string, string>
+    })
+    launched.process().stdout?.on('data', (d) => logs.push(String(d)))
+    await launched.firstWindow()
+    return { launched, logs }
+  }
+  const minis = (a: ElectronApplication) =>
+    a.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().filter((w) => w.isVisible() && w.contentView.children.length === 2).length)
+
+  test('a link from Terminal opens in a small window, with no keys held', async () => {
+    const { launched, logs } = await start({ INSTANT_TEST_FRONT_APP: 'com.apple.Terminal' })
+    try {
+      await expect.poll(() => minis(launched), { timeout: 10_000 }).toBe(1)
+      expect(logs.join('')).not.toContain('[instant] sent')
+    } finally {
+      await launched.close()
+    }
+  })
+
+  test('a link from another app, with no keys held, still goes to the main browser', async () => {
+    const { launched, logs } = await start({ INSTANT_TEST_FRONT_APP: 'com.microsoft.teams2' })
+    try {
+      await expect.poll(() => logs.join(''), { timeout: 10_000 }).toContain('[instant] sent')
+      expect(await minis(launched)).toBe(0)
+    } finally {
+      await launched.close()
+    }
+  })
+
+  test('with the terminal setting off, a link from Terminal goes to the main browser', async () => {
+    const { launched, logs } = await start({ INSTANT_TEST_FRONT_APP: 'com.apple.Terminal' }, { terminalLinksSmallWindow: false })
+    try {
+      await expect.poll(() => logs.join(''), { timeout: 10_000 }).toContain('[instant] sent')
+      expect(await minis(launched)).toBe(0)
+    } finally {
+      await launched.close()
+    }
+  })
+
+  test('Settings says which app gets the links, and the Make default action reaches the app', async () => {
+    const { launched, logs } = await start({ INSTANT_TEST_DEFAULT: '0', INSTANT_TEST_WEB_APP: 'Safari', INSTANT_TEST_PACKAGED: '1' })
+    try {
+      const bar = await (async () => {
+        for (let i = 0; i < 100; i++) {
+          const found = launched.windows().find((w) => w.url().includes('/search/'))
+          if (found) return found
+          await new Promise((r) => setTimeout(r, 100))
+        }
+        throw new Error('search bar page not found')
+      })()
+      await bar.evaluate(() => (window as unknown as { instantSearch: { openSettings(s: string): void } }).instantSearch.openSettings('General'))
+      const settings = await (async () => {
+        for (let i = 0; i < 100; i++) {
+          for (const w of launched.windows()) if ((await w.title()) === 'Instant Browser Settings') return w
+          await new Promise((r) => setTimeout(r, 100))
+        }
+        throw new Error('settings page not found')
+      })()
+      type Api = { get(): Promise<{ defaultBrowser: { text: string; canMakeDefault: boolean }; settings: { terminalLinksSmallWindow: boolean } }>; action(a: object): Promise<unknown> }
+      const view = await settings.evaluate(() => (window as unknown as { instantSettings: Api }).instantSettings.get())
+      expect(view.defaultBrowser.text).toContain('Links go to Safari now.')
+      expect(view.defaultBrowser.canMakeDefault).toBe(true)
+      await expect(settings.getByRole('button', { name: 'Make default' })).toBeVisible()
+      expect(view.settings.terminalLinksSmallWindow).toBe(true)
+      // The page shows the row and the new switch.
+      await expect(settings.getByText('Default browser', { exact: true })).toBeVisible()
+      await expect(settings.getByText('Links from terminals and code editors', { exact: true })).toBeVisible()
+      await settings.evaluate(() => (window as unknown as { instantSettings: Api }).instantSettings.action({ type: 'make-default-browser' }))
+      await expect.poll(() => logs.join(''), { timeout: 5000 }).toContain('[instant] make default requested')
+    } finally {
+      await launched.close()
+    }
+  })
 })

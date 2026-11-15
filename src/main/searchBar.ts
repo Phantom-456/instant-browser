@@ -4,6 +4,7 @@ import { SETTINGS_SECTIONS, type SettingsSection } from '../shared/bubbles'
 import {
   SEARCH_CANCEL,
   SEARCH_HISTORY_CHANGED,
+  SEARCH_OPEN_MANAGER,
   SEARCH_OPEN_SETTINGS,
   SEARCH_QUERY,
   SEARCH_RESIZE,
@@ -18,12 +19,12 @@ const HEIGHT = 60
 const MAX_HEIGHT = 520
 
 /** Where a UI page lives: the dev server in `pnpm dev`, a file after a build. */
-export function rendererPage(name: 'search' | 'toolbar' | 'settings'): { url?: string; file?: string } {
+export function rendererPage(name: 'search' | 'toolbar' | 'settings' | 'pin' | 'preview' | 'manager' | 'bubble'): { url?: string; file?: string } {
   const dev = process.env.ELECTRON_RENDERER_URL
   return dev ? { url: `${dev}/${name}/index.html` } : { file: join(__dirname, `../renderer/${name}/index.html`) }
 }
 
-export function preloadPath(name: 'search' | 'toolbar' | 'settings'): string {
+export function preloadPath(name: 'search' | 'toolbar' | 'settings' | 'pin' | 'preview' | 'manager' | 'bubble'): string {
   return join(__dirname, `../preload/${name}.js`)
 }
 
@@ -34,12 +35,15 @@ export interface SearchBarDeps {
   /** History and settings that match (local, instant). */
   query: (text: string) => BarResults
   onOpenSettings: (section: SettingsSection) => void
+  onOpenManager: () => void
   /** The bar is about to show. */
   onShow: () => void
 }
 
 export class SearchBar {
   private readonly win: BrowserWindow
+  /** The window itself, for the bubbles that sit beside it. */
+  get window(): BrowserWindow { return this.win }
 
   constructor(private readonly deps: SearchBarDeps) {
     const { onSubmit, suggest } = deps
@@ -84,6 +88,11 @@ export class SearchBar {
       if (!known) return
       this.hide()
       deps.onOpenSettings(known)
+    })
+    ipcMain.on(SEARCH_OPEN_MANAGER, (event) => {
+      if (event.sender !== this.win.webContents) return
+      this.hide()
+      deps.onOpenManager()
     })
     // The bar grows to show the suggestions and shrinks back.
     ipcMain.on(SEARCH_RESIZE, (event, height: unknown) => {

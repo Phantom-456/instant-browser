@@ -1,6 +1,6 @@
 /** The sections of the settings window, in order. */
 export const SETTINGS_SECTIONS = [
-  'General', 'Search engine', 'Appearance', 'Privacy and security', 'Site permissions', 'Downloads', 'About'
+  'General', 'Search engine', 'Appearance', 'Pins', 'Privacy and security', 'Site permissions', 'Downloads', 'About'
 ] as const
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
 
@@ -15,6 +15,7 @@ export interface SettingsBubble {
 const ALL: SettingsBubble[] = [
   { id: 'settings', label: 'Settings', section: 'General', keywords: ['settings', 'preferences', 'options', 'general'] },
   { id: 'hotkey', label: 'Hotkey', section: 'General', keywords: ['hotkey', 'shortcut', 'keyboard', 'keys'] },
+  { id: 'pins', label: 'Pin size', section: 'Pins', keywords: ['pin', 'pins', 'size', 'collapse', 'offload', 'memory'] },
   { id: 'search-engine', label: 'Search engine', section: 'Search engine', keywords: ['search', 'engine', 'google', 'duckduckgo', 'bing', 'suggestions'] },
   { id: 'link-router', label: 'Link router', section: 'General', keywords: ['link', 'links', 'router', 'default', 'browser'] },
   { id: 'dia-profile', label: 'Dia profile', section: 'General', keywords: ['dia', 'profile', 'space', 'send'] },

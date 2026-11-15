@@ -91,7 +91,12 @@ export function initWebSession(deps: { settings: SettingsFile; permissions: Perm
   })
 
   // Downloads: saved to a folder, never opened by the app.
-  ses.on('will-download', (_event, item) => {
+  ses.on('will-download', (_event, item, contents) => {
+    const owner = contents?.id
+    if (owner !== undefined) {
+      running.set(owner, (running.get(owner) ?? 0) + 1)
+      item.once('done', () => running.set(owner, Math.max(0, (running.get(owner) ?? 1) - 1)))
+    }
     const s = settings.get()
     // With no save path set, Electron shows the normal "save as" dialog.
     if (!s.askDownloadLocation) item.setSavePath(freePath(s.downloadFolder ?? app.getPath('downloads'), item.getFilename()))
@@ -100,3 +105,7 @@ export function initWebSession(deps: { settings: SettingsFile; permissions: Perm
   cached = ses
   return ses
 }
+
+/** Downloads that are running, for each page (by its WebContents id). Offload waits while one runs. */
+const running = new Map<number, number>()
+export const hasRunningDownload = (webContentsId: number): boolean => (running.get(webContentsId) ?? 0) > 0

@@ -29,7 +29,7 @@ pnpm smoke
 pnpm dist:mac
 ```
 
-The app is `dist/mac-arm64/Instant Browser.app`. It is not signed. The first start may need right-click, Open. It has no Dock icon; look for the icon in the menu bar. It lists itself as a web browser in System Settings, but it never changes your default browser by itself.
+The app is `dist.noindex/mac-arm64/Instant Browser.app`. It is not signed. The first start may need right-click, Open. It has no Dock icon; look for the icon in the menu bar. It lists itself as a web browser in System Settings, but it never changes your default browser by itself.
 
 ## Look
 
@@ -51,9 +51,35 @@ The windows use macOS glass (vibrancy), soft round shapes and small hover animat
 | Cmd+Shift+M | Send the page to your main browser and close |
 | Cmd+Shift+O | Choose a browser to send to |
 
-- The pin button keeps the window above other apps, or lets it go behind them.
+- Windows stay above other apps (Settings > Appearance). The pin button collapses a window to a pin (see Pins below).
 - A window stays on the desktop where you opened it. The follow button (two squares, Mac only for now) makes that window follow you to other desktops.
 - Sending moves only the address. Text you typed in a page and did not send is lost.
+
+## Pins
+
+The pin button in the toolbar collapses the window. The whole window shrinks into a small pin on the desktop, where the button was. The page stays alive behind the pin.
+
+- **Hold the pointer on a pin for 2 seconds.** It opens as a capsule with the page name and address, and the gradient border draws itself around it while it arms. Until then, clicks go through to the app behind it. When it is ready, click the pin to open the window again, where it was.
+- **Follow** (right of the pin) makes the pin and its window follow you to every desktop.
+- **Offload** (below): drag the small bubble toward the pin. The page is saved as a picture and released from memory. The pin becomes a border only. Click the pin and the window grows back with the saved picture, then the live page loads and the scroll position comes back. A click on the Offload bubble pauses its countdown, a right-click goes on.
+- **Remove** (above) takes the pin away and keeps it in an archive.
+- Click the name to rename it (up to 60 characters). Drag the pin to move it.
+- Pins come back after a restart as border-only pins.
+- **Automatic Offload** is off until you turn it on in Settings > Pins: by time without use, or when the app uses more memory than a limit you choose (the oldest pins go first; paused pins stay).
+
+**Memory, honestly:** every pin is its own small window and costs about 80 MB, even after Offload. Offload frees the page behind the pin, which is often 90 to 200 MB. The most pins at once is 12 by default (4 to 40 in Settings). The menu bar icon has a Pins list with Open, Offload and Remove for each pin.
+
+## Pin Manager
+
+Open it from the menu bar icon (Pin Manager), from the round bubble to the right of the search bar, or with Cmd+Shift+P while the search bar is open. It lists:
+
+- **Pins**: name, address, colours, and whether the page is in memory or released. Open, Rename (double-click the name), Offload, Follow, Details and Remove.
+- **Open windows**: Show or Close. An open window is not a pin.
+- **Archive**: pins you removed. **Put back** shows the pin again (released). **Delete for good** asks first and cannot be undone.
+
+macOS does not tell apps the names or numbers of your desktops, so pins are listed in one place. A pin whose desktop is gone is still listed and opens from here.
+
+The round **Settings** bubble beside the search bar opens a menu of settings sections when you hover it (Cmd+, does the same from the keyboard).
 
 ## Search bar history
 
@@ -81,7 +107,7 @@ In Settings > General you can choose which Dia profile "send to browser" opens p
 
 ## Link router
 
-If you make Instant Browser your default browser, every link you click in another app (Teams, Slack, mail) reaches it first. It then sends the link to your main browser as a new tab, unless you hold **Option+Command** while you click: then the link opens in a small window. You can change the keys, or turn the router off, in Settings. It works only while Instant Browser is the default browser. The app never makes itself the default.
+If you make Instant Browser your default browser, every link you click in another app (Teams, Slack, mail) reaches it first. It then sends the link to your main browser as a new tab, unless you hold **Option+Command** while you click: then the link opens in a small window. You can change the keys, or turn the router off, in Settings. It works only while Instant Browser is the default browser. Links that come from a terminal or a code editor (for example from `gh auth login`) open in a small window with no keys needed; you can turn that off in Settings. In Settings, General, "Default browser" shows which app macOS sends links to now, and a "Make default" button asks macOS to switch; macOS asks you to confirm, and nothing changes until you do. The app never changes your default by itself.
 
 ## Settings
 
