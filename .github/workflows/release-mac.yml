@@ -1,7 +1,7 @@
-name: Release
+name: Release Mac
 
-# Push a tag like v0.2.0 to build the installers and publish them in GitHub Releases.
-# The app checks the same Releases for updates.
+# Push a tag like v0.3.0 to build the Mac installers and publish them in GitHub Releases.
+# The Mac app checks the same Releases for updates. The Windows package has its own tags (win-v...), see release-windows.yml.
 on:
   push:
     tags: ['v*']
@@ -40,28 +40,8 @@ jobs:
           pnpm build
           if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ]; then
             echo "Apple secrets found: signing and notarizing."
-            pnpm exec electron-builder --mac --arm64 --x64 --publish always -c.mac.notarize=true
+            pnpm exec electron-builder --config electron-builder.mac.yml --mac --arm64 --x64 --publish always -c.mac.notarize=true
           else
             echo "::warning::No Apple secrets: building UNSIGNED Mac files."
-            CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --mac --arm64 --x64 --publish always
+            CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --config electron-builder.mac.yml --mac --arm64 --x64 --publish always
           fi
-
-  windows:
-    needs: mac # one job at a time makes the release, so the two do not race
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # the version comes from "packageManager" in package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Build and publish (Windows, not signed yet)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EP_PRE_RELEASE: ${{ contains(github.ref_name, '-') }}
-        run: |
-          pnpm build
-          pnpm exec electron-builder --win --x64 --publish always
-        shell: bash

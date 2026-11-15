@@ -11,10 +11,10 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "smoke": "pnpm build && playwright test",
-    "dist:mac": "pnpm build && electron-builder --mac dir",
-    "dist:win": "pnpm build && electron-builder --win dir",
-    "dist:mac:release": "pnpm build && electron-builder --mac --arm64 --x64 --publish never",
-    "dist:win:release": "pnpm build && electron-builder --win --x64 --publish never"
+    "dist:mac": "pnpm build && electron-builder --config electron-builder.mac.yml --mac dir",
+    "dist:win": "pnpm build && electron-builder --config electron-builder.win.yml --win dir",
+    "dist:mac:release": "pnpm build && electron-builder --config electron-builder.mac.yml --mac --arm64 --x64 --publish never",
+    "dist:win:release": "pnpm build && electron-builder --config electron-builder.win.yml --win --x64 --publish never"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

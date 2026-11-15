@@ -1,4 +1,3 @@
-import type { SettingsBubble } from './bubbles'
 import type { BrowserInfo } from './browserCommands'
 import type { SavedPermission } from './permissions'
 import type { DefaultBrowserNote } from './defaultBrowser'
@@ -14,6 +13,10 @@ export const SEARCH_QUERY = 'search:query'
 export const SEARCH_OPEN_SETTINGS = 'search:open-settings'
 export const SEARCH_HISTORY_CHANGED = 'search:history-changed'
 export const SEARCH_OPEN_MANAGER = 'search:open-manager'
+
+/** A two-finger swipe in a web page: can the history go that way, and go. */
+export const PAGE_SWIPE = 'page:swipe'
+export const PAGE_SWIPE_CAN = 'page:swipe-can'
 
 export const BUBBLE_ACTION = 'bubble:action'
 export const BUBBLE_HOVER = 'bubble:hover'
@@ -61,6 +64,8 @@ export interface ManagerRow {
   archived: boolean
   archivedAt: number | null
   following: boolean
+  /** The website's icon, or null. */
+  icon: string | null
   /** The pin's own colours, as CSS. */
   gradient: string
   createdAt: number
@@ -108,6 +113,8 @@ export interface PinView {
   following: boolean
   /** resident: filled circle. offloaded: border only. */
   state: 'resident' | 'offloaded'
+  /** The website's own icon (a small picture), or null: then the pin icon shows. */
+  icon: string | null
   /** CSS for the pin's own colours. */
   gradient: string
   accent: string
@@ -116,6 +123,8 @@ export interface PinView {
   angle: number
   /** The system is in dark mode. */
   dark: boolean
+  /** How long the border takes to draw while the pin arms, in milliseconds. */
+  armMs: number
   /** Letter colour that is readable on the gradient. */
   ink: 'black' | 'white'
   phase: 'idle' | 'arming' | 'armed' | 'grace'
@@ -206,7 +215,6 @@ export interface HotkeyEvent {
 /** What the search bar shows besides the search suggestions. Built from local data, so it is instant. */
 export interface BarResults {
   query: string
-  settings: SettingsBubble[]
   searches: Array<{ term: string; sources: string[] }>
   pages: Array<{ title: string; url: string; sources: string[] }>
 }

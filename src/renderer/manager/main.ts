@@ -80,7 +80,7 @@ function pinRow(r: ManagerRow): HTMLElement {
 }
 
 function render(): void {
-  summary.textContent = `${view.pins.length} of ${view.maxPins} pins. Each pin is a small window of its own and uses about 80 MB, even when its page is released.`
+  summary.textContent = `${view.pins.length} of ${view.maxPins} pins. A pin whose page is alive has a small window of its own (about 20 MB). A pin whose page is released uses almost no memory.`
   main.replaceChildren()
 
   main.append(node('h2', {}, `Pins (${view.pins.length})`))

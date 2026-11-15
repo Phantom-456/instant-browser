@@ -78,6 +78,24 @@ describe('pin layout', () => {
   })
 })
 
+describe('arming with a different wait', () => {
+  it('waits as long as the setting says, in milliseconds', () => {
+    let s = stepArming(IDLE, 'enter', 0, 1250)
+    expect(s.phase).toBe('arming')
+    expect(stepArming(s, 'tick', 1249, 1250).phase).toBe('arming')
+    s = stepArming(s, 'tick', 1250, 1250)
+    expect(s.phase).toBe('armed')
+    expect(nextTickAt(stepArming(IDLE, 'enter', 100, 300), 300)).toBe(400)
+  })
+
+  it('0 means the pin takes clicks at once, with no arming phase', () => {
+    const s = stepArming(IDLE, 'enter', 0, 0)
+    expect(s.phase).toBe('armed')
+    expect(takesClicks(s)).toBe(true)
+    expect(armProgress(s, 0, 0)).toBe(1)
+  })
+})
+
 describe('arming', () => {
   const run = (...steps: Array<[Parameters<typeof stepArming>[1], number]>): ArmState => steps.reduce<ArmState>((s, [e, t]) => stepArming(s, e, t), IDLE)
 

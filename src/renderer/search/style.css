@@ -7,7 +7,9 @@ html, body { background: transparent; overflow: hidden; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px) scale(0.985); } }
 
 #field { display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 22px; }
-#glass { display: grid; flex: none; color: var(--ink-faint); transition: color 200ms var(--ease), transform 300ms var(--ease); }
+#glass { display: grid; place-items: center; flex: none; width: 28px; height: 28px; margin: 0 -4px 0 -6px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink-faint); cursor: default; transition: color 200ms var(--ease), transform 300ms var(--ease), background 200ms var(--ease); }
+#glass.clear:hover { background: var(--hover); color: var(--ink); }
+#glass.clear:active { transform: scale(0.9); }
 #glass svg { width: 21px; height: 21px; }
 #field:focus-within #glass { color: var(--accent); transform: scale(1.08); }
 #query {

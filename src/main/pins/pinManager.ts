@@ -2,7 +2,7 @@ import { dialog, screen } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs'
 import { generateGradient } from '../../shared/pins/gradient'
-import { activePins, archivedPins, archivePin, clampPoint, clampRect, createPin, labelOf, normalizeLabel, type GradientSpec, type PinRecord, type Point, type Rect } from '../../shared/pins/model'
+import { activePins, archivedPins, archivePin, clampPoint, clampRect, createPin, labelOf, normalizeLabel, windowForPin, type GradientSpec, type PinRecord, type Point, type Rect } from '../../shared/pins/model'
 import type { MiniHandle, MiniInfo, MiniWindowManager } from '../miniWindow'
 import type { SettingsFile } from '../settingsFile'
 import type { PinFacts } from '../../shared/pins/offloadPolicy'
@@ -11,7 +11,8 @@ import { statSync } from 'node:fs'
 import { gradientCss } from '../../shared/pins/gradient'
 import type { ManagerAction, ManagerRow, ManagerView } from '../../shared/ipc'
 import { PinStore } from './pinStore'
-import { PinWindow, type PinOut } from './pinWindows'
+import { PinSurface } from './pinSurface'
+import type { PinWindow, PinOut } from './pinWindows'
 
 export interface PinManagerDeps {
   settings: SettingsFile
@@ -22,7 +23,7 @@ export interface PinManagerDeps {
 /** The live part of a pin. `mini` is the hidden window with its page (resident), or null once the page was released (offloaded). */
 interface Live {
   mini: MiniHandle | null
-  pin: PinWindow
+  pin: PinSurface
 }
 
 export type OffloadResult = { ok: true } | { ok: false; reason: 'busy' | 'unsaved' | 'audible' | 'no-snapshot' | 'not-resident' }
@@ -51,7 +52,13 @@ export class PinManager {
       deps.settings
     )
     this.automation.start()
+    // A released pin has no page process. Where the pointer is decides when it gets one (see pinSurface.ts).
+    if (process.env.INSTANT_TEST_NO_POLL !== '1') {
+      this.hoverTimer = setInterval(() => this.pollHoverAt(screen.getCursorScreenPoint()), 100)
+      this.hoverTimer.unref()
+    }
   }
+  private hoverTimer: ReturnType<typeof setInterval> | null = null
 
   // ---- Start-up and the screen ----
 
@@ -97,7 +104,7 @@ export class PinManager {
     let bytes = 0
     try { bytes = p.snapshotAt !== null ? statSync(this.deps.store.snapshotPath(p.id)).size : 0 } catch { bytes = 0 }
     return {
-      id: p.id, label: labelOf(p), customLabel: p.label ?? '', url: p.url, state: p.state, archived: p.archived, archivedAt: p.archivedAt,
+      id: p.id, icon: p.icon, label: labelOf(p), customLabel: p.label ?? '', url: p.url, state: p.state, archived: p.archived, archivedAt: p.archivedAt,
       following: p.following, gradient: gradientCss(p.gradient), createdAt: p.createdAt, lastUsedAt: p.lastUsedAt, snapshotAt: p.snapshotAt,
       pictureBytes: bytes, scrollY: p.scroll ? Math.round(p.scroll.y) : null
     }
@@ -184,7 +191,7 @@ export class PinManager {
       await dialog.showMessageBox({
         type: 'info',
         message: `You have ${settings.get().maxPins} pins. That is the limit.`,
-        detail: 'Remove a pin, or raise the limit in Settings. Each pin uses about 80 MB of memory.',
+        detail: 'Remove a pin, or raise the limit in Settings. A pin with a live page uses about 20 MB.',
         buttons: ['OK']
       })
       return
@@ -198,9 +205,10 @@ export class PinManager {
       const want = button ?? { x: info.bounds.x + info.bounds.width / 2, y: info.bounds.y + info.bounds.height / 2 }
       const centre = clampPoint(want, [workAreaFor(want)], d / 2)
       const gradient = known?.gradient ?? generateGradient(store.all().map((p) => p.gradient))
+      const icon = await minis.faviconData(mini) // the website's own icon, if it has one
       const now = Date.now()
       const record: PinRecord = {
-        ...createPin({ url: info.url, title: info.title, window: info.bounds, pin: centre, following: info.following, gradient }, id, now),
+        ...createPin({ url: info.url, title: info.title, window: info.bounds, pin: centre, following: info.following, gradient, icon, anchor: { x: Math.round(centre.x - info.bounds.x), y: Math.round(centre.y - info.bounds.y) } }, id, now),
         restoredAt: known?.restoredAt ?? null // a window that was just restored is not offloaded for 5 minutes
       }
       store.put(record)
@@ -213,9 +221,10 @@ export class PinManager {
     }
   }
 
-  private makePinWindow(record: PinRecord, centre: Point): PinWindow {
-    return new PinWindow(record, centre, {
+  private makePinWindow(record: PinRecord, centre: Point): PinSurface {
+    return new PinSurface(record, centre, {
       diameter: this.diameter,
+      armMs: () => this.deps.settings.get().pinArmMs,
       workAreaFor,
       onEvent: (id, event) => void this.onPinEvent(id, event)
     })
@@ -270,8 +279,8 @@ export class PinManager {
     live.pin.destroy()
     this.live.delete(id)
     this.deps.store.delete(id)
-    // The window grows out of the pin, to the size and place it had.
-    await this.deps.minis.reveal(live.mini, record.following, centre, record.window, this.diameter())
+    // The window grows out of the pin and opens with its Collapse button on the pin, wherever the pin is now.
+    await this.deps.minis.reveal(live.mini, record.following, centre, this.windowAt(record, centre), this.diameter())
   }
 
   /**
@@ -293,7 +302,7 @@ export class PinManager {
       url: record.url,
       from: centre,
       size: this.diameter(),
-      to: record.window,
+      to: this.windowAt(record, centre),
       following: record.following,
       preview,
       scroll: record.scroll,
@@ -309,6 +318,11 @@ export class PinManager {
     })
     this.remembered.set(mini, { id, gradient: record.gradient, restoredAt: Date.now() })
     this.automation.forget(id)
+  }
+
+  /** Where the window opens for this pin: its button on the pin, kept inside the screen. */
+  private windowAt(record: PinRecord, centre: Point): Rect {
+    return clampRect(windowForPin(record.window, record.anchor, centre), [workAreaFor(centre)], 0)
   }
 
   /** Follow is one setting shared by the pin and the window behind it. */
@@ -435,6 +449,7 @@ export class PinManager {
   /** The app is quitting. */
   dispose(): void {
     this.automation.stop()
+    if (this.hoverTimer) clearInterval(this.hoverTimer)
     for (const { pin } of this.live.values()) pin.destroy()
     this.live.clear()
   }
@@ -444,7 +459,17 @@ export class PinManager {
 
   /** For tests. */
   liveIds(): string[] { return [...this.live.keys()] }
-  windowOf(id: string): PinWindow | undefined { return this.live.get(id)?.pin }
+  /** The real pin window of a pin (it is started if the pin only had its bare shell). */
+  windowOf(id: string): PinWindow | undefined { return this.live.get(id)?.pin.ensureWindow() }
+  /** Tests: which form is the pin in (a real window with a page process, or the bare shell)? */
+  surfaceState(id: string): { window: boolean; shell: boolean } | null {
+    const s = this.live.get(id)?.pin
+    return s ? { window: s.hasWindow(), shell: s.hasShell() } : null
+  }
+  /** Does this pin have a page process of its own right now? */
+  hasPinWindow(id: string): boolean { return !!this.live.get(id)?.pin.hasWindow() }
+  /** Tests: act as if the pointer were here. */
+  pollHoverAt(point: Point, now = Date.now()): void { for (const live of this.live.values()) live.pin.poll(point, now) }
   hasPage(id: string): boolean { return !!this.live.get(id)?.mini }
   tickAutomation(now = Date.now()): Promise<void> { return this.automation.tick(now) }
 }

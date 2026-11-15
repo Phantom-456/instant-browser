@@ -115,6 +115,46 @@ test('Collapse keeps the page alive behind a pin; clicking the armed pin restore
   expect(again!.gradient).toEqual(first!.gradient)
 })
 
+/** Where the Collapse button of the visible window is on the screen (its centre). */
+const buttonNow = () =>
+  app.evaluate(async ({ BaseWindow, BrowserWindow }) => {
+    for (const win of BaseWindow.getAllWindows()) {
+      if (win instanceof BrowserWindow || !win.isVisible()) continue
+      const bar = win.contentView.children.find((v) => 'webContents' in v && (v as unknown as { webContents: Electron.WebContents }).webContents.getURL().includes('/toolbar/')) as unknown as { webContents: Electron.WebContents } | undefined
+      const r = (await bar?.webContents.executeJavaScript("(() => { const r = document.getElementById('collapse').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })()")) as { x: number; y: number }
+      const c = win.getContentBounds()
+      return { x: c.x + r.x, y: c.y + r.y }
+    }
+    return null
+  })
+
+test('the window opens with its pin button exactly on the pin, even after the pin was moved', async () => {
+  await new Promise((r) => setTimeout(r, 900))
+  const id = (await liveIds())[0]!
+  // Move the pin somewhere else (as a drag would), then open it.
+  const target = await app.evaluate(({ screen }, pinId) => {
+    const w = (globalThis as unknown as { __pins: { windowOf(id: string): { centrePoint: { x: number; y: number }; moveTo(p: { x: number; y: number }): void } } }).__pins.windowOf(pinId)
+    const area = screen.getDisplayNearestPoint(w.centrePoint).workArea
+    // Sideways, to the left, but not so far that the window (which must stay on the screen) would be pushed back.
+    const moved = { x: Math.max(area.x + 140, w.centrePoint.x - 160), y: w.centrePoint.y }
+    w.moveTo(moved)
+    return moved
+  }, id)
+  await arm(id)
+  const c = await circle(id)
+  await pointer('click', Math.round(c.x + c.width / 2), Math.round(c.y + c.height / 2))
+  await expect.poll(async () => (await liveIds()).length).toBe(0)
+  await expect.poll(visibleMini).toBe(1)
+  await new Promise((r) => setTimeout(r, 1000)) // the window is growing out of the pin
+  const button = (await buttonNow())!
+  expect(Math.abs(button.x - target.x)).toBeLessThanOrEqual(2) // the pin button is on the pin
+  expect(Math.abs(button.y - target.y)).toBeLessThanOrEqual(2)
+
+  // Collapse again, so the next test has a pin.
+  await toolbarAction({ type: 'collapse' })
+  await expect.poll(async () => (await liveIds()).length, { timeout: 8000 }).toBe(1)
+})
+
 test('Rename in place keeps at most 60 characters; Remove archives the pin and closes its page', async () => {
   const [pin] = await pins()
   const id = pin!.id

@@ -70,3 +70,40 @@ test('Cmd+, and Cmd+Shift+P in the search field do the same as the bubbles', asy
   await send('/search/', [{ type: 'keyDown', keyCode: ',', modifiers: ['meta'] }, { type: 'char', keyCode: ',', modifiers: ['meta'] }])
   await expect.poll(() => open('Settings'), { timeout: 8000 }).toBe(true)
 })
+
+const barJs = (code: string) =>
+  app.evaluate(async ({ webContents }, c) => {
+    const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('/search/'))
+    return wc ? await wc.executeJavaScript(c) : null
+  }, code)
+const toggleBar = () => app.evaluate(() => (globalThis as unknown as { __searchBar: { toggle(): void } }).__searchBar.toggle())
+
+test('the hotkey closes an open bar; what was typed stays when it opens again; the X clears the field', async () => {
+  await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.getTitle().includes('Settings') || w.getTitle().includes('Pin Manager')) w.close() })
+  await showBar()
+  await expect.poll(barVisible).toBe(true)
+
+  await expect.poll(() => barJs("document.getElementById('query') !== null")).toBe(true) // the page is there
+  await new Promise((r) => setTimeout(r, 400)) // and the list had time to fill
+  // No quick settings in the list any more.
+  expect(String(await barJs("Array.from(document.querySelectorAll('h2')).map((h) => h.textContent).join('|')"))).not.toMatch(/settings/i)
+
+  // The magnifier is on the left; typing turns it into an X on the left.
+  await expect.poll(() => barJs("document.getElementById('glass').classList.contains('clear')")).toBe(false)
+  await barJs("(() => { const i = document.getElementById('query'); i.value = 'half typed'; i.dispatchEvent(new Event('input')) })()")
+  await expect.poll(() => barJs("document.getElementById('glass').classList.contains('clear')")).toBe(true)
+
+  // The hotkey (toggle) closes the open bar. Opening again keeps the text, selected.
+  await toggleBar()
+  await expect.poll(barVisible).toBe(false)
+  await toggleBar()
+  await expect.poll(barVisible).toBe(true)
+  expect(await barJs("document.getElementById('query').value")).toBe('half typed')
+  await expect.poll(() => barJs("(() => { const i = document.getElementById('query'); return i.selectionStart === 0 && i.selectionEnd === i.value.length })()")).toBe(true)
+
+  // The X clears the whole field and goes back to the magnifier.
+  await barJs("document.getElementById('glass').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))")
+  await expect.poll(() => barJs("document.getElementById('query').value")).toBe('')
+  expect(await barJs("document.getElementById('glass').classList.contains('clear')")).toBe(false)
+  await toggleBar() // leave it closed
+})

@@ -29,14 +29,18 @@ export interface PinRecord {
   title: string
   /** A name given by the person, or null. */
   label: string | null
+  /** The website's own icon as a small picture (a data address), or null. The pin shows it instead of the pin icon. */
+  icon: string | null
   state: PinState
   archived: boolean
   archivedAt: number | null
   /** The pin (and the window it came from) is shown on every desktop. Shared by both. */
   following: boolean
   gradient: GradientSpec
-  /** Where and how large the window was, to put it back. */
+  /** Where and how large the window was. Its size is used again when it opens. */
   window: Rect
+  /** Where the Collapse button was inside the window (from its top left corner). The window opens with that button on the pin. */
+  anchor: Point | null
   /** The centre of the circle, in screen coordinates. */
   pin: Point
   scroll: Point | null
@@ -46,6 +50,12 @@ export interface PinRecord {
   lastUsedAt: number
   /** For the cool-down after a restore. */
   restoredAt: number | null
+}
+
+/** An icon is kept only if it is a small picture as a data address. Anything else is dropped. */
+export const MAX_ICON_CHARS = 60_000
+export function cleanIcon(value: unknown): string | null {
+  return typeof value === 'string' && /^data:image\/(png|jpeg|gif|webp|svg\+xml|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/.test(value) && value.length <= MAX_ICON_CHARS ? value : null
 }
 
 const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
@@ -74,12 +84,14 @@ export function parsePin(raw: unknown): PinRecord | null {
     url: r.url,
     title: typeof r.title === 'string' ? r.title.slice(0, 300) : '',
     label: typeof r.label === 'string' && r.label.trim() ? r.label.trim().slice(0, MAX_LABEL_LENGTH) : null,
+    icon: cleanIcon(r.icon),
     state: r.state === 'resident' ? 'resident' : 'offloaded',
     archived: r.archived === true,
     archivedAt: finite(r.archivedAt) ? r.archivedAt : null,
     following: r.following === true,
     gradient: r.gradient,
     window: r.window,
+    anchor: isPoint(r.anchor) ? r.anchor : null,
     pin: r.pin,
     scroll: isPoint(r.scroll) ? r.scroll : null,
     snapshotAt: finite(r.snapshotAt) ? r.snapshotAt : null,
@@ -108,7 +120,7 @@ export function parsePinFile(raw: unknown): { pins: PinRecord[]; dropped: number
 }
 
 export function createPin(
-  input: { url: string; title: string; window: Rect; pin: Point; following: boolean; gradient: GradientSpec },
+  input: { url: string; title: string; window: Rect; pin: Point; following: boolean; gradient: GradientSpec; icon?: string | null; anchor?: Point | null },
   id: string,
   now: number
 ): PinRecord {
@@ -117,12 +129,14 @@ export function createPin(
     url: input.url,
     title: input.title,
     label: null,
+    icon: cleanIcon(input.icon),
     state: 'resident',
     archived: false,
     archivedAt: null,
     following: input.following,
     gradient: input.gradient,
     window: input.window,
+    anchor: input.anchor ?? null,
     pin: input.pin,
     scroll: null,
     snapshotAt: null,
@@ -153,6 +167,15 @@ export const archivedPins = (pins: PinRecord[]): PinRecord[] => pins.filter((p) 
 /** Remove a pin from view. The record, its colours and its preview are kept (the manager shows the archive later). */
 export function archivePin(pin: PinRecord, now: number): PinRecord {
   return { ...pin, archived: true, archivedAt: now }
+}
+
+/**
+ * Where the window goes when its pin is opened: the Collapse button lands exactly on the pin. Without a saved button
+ * place (an old pin) the middle of the top bar is used.
+ */
+export function windowForPin(window: Rect, anchor: Point | null, pin: Point): Rect {
+  const a = anchor ?? { x: window.width / 2, y: 24 }
+  return { x: Math.round(pin.x - a.x), y: Math.round(pin.y - a.y), width: window.width, height: window.height }
 }
 
 // ---- Keeping things on screen ----

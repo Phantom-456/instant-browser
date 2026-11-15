@@ -27,13 +27,15 @@ export interface Settings {
   showHistory: boolean
   /** Browsers (by name) whose history is not read. */
   historyOff: string[]
-  /** Keep a hidden window ready, so the next one opens at once. Uses about 180 MB more memory while ready. */
+  /** Keep a hidden window ready, so the next one opens at once. Uses about 40 MB more memory while ready. */
   warmWindow: boolean
   /** Links that come from a terminal or a code editor open in a small window, with no keys needed. */
   terminalLinksSmallWindow: boolean
   /** Size of a collapsed pin (the circle), in points. The same as the Collapse button in the toolbar. */
   pinSize: number
-  /** The most pins that can exist at once. Each pin window costs about 80 MB. */
+  /** How long the pointer must rest on a pin before it takes clicks, in milliseconds. 0 means at once. */
+  pinArmMs: number
+  /** The most pins that can exist at once. A pin with a live page has a window of about 20 MB; a released pin costs almost nothing. */
   maxPins: number
   /** Offload pins that were not used for a while. Off by default. */
   autoOffloadInactivity: boolean
@@ -58,6 +60,7 @@ export const PIN_SIZES: ReadonlyArray<{ label: string; value: number }> = [
 
 export const PIN_LIMITS = {
   size: { min: 19, max: 37 },
+  armMs: { min: 0, max: 30_000 },
   maxPins: { min: 4, max: 40 },
   minutes: { min: 5, max: 240 },
   memoryGB: { min: 0.5, max: 8 }
@@ -85,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
   historyOff: [],
   warmWindow: true,
   terminalLinksSmallWindow: true,
+  pinArmMs: 2000,
   pinSize: 28, // the same size as the Collapse button in the toolbar
   maxPins: 12,
   autoOffloadInactivity: false,
@@ -147,6 +151,7 @@ export function mergeSettings(raw: unknown): Settings {
     showHistory: bool(r.showHistory, d.showHistory),
     warmWindow: bool(r.warmWindow, d.warmWindow),
     terminalLinksSmallWindow: bool(r.terminalLinksSmallWindow, d.terminalLinksSmallWindow),
+    pinArmMs: clampNumber(r.pinArmMs, d.pinArmMs, PIN_LIMITS.armMs.min, PIN_LIMITS.armMs.max),
     pinSize: clampNumber(r.pinSize, d.pinSize, PIN_LIMITS.size.min, PIN_LIMITS.size.max),
     maxPins: clampNumber(r.maxPins, d.maxPins, PIN_LIMITS.maxPins.min, PIN_LIMITS.maxPins.max),
     autoOffloadInactivity: bool(r.autoOffloadInactivity, d.autoOffloadInactivity),

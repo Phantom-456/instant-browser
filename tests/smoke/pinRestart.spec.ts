@@ -28,7 +28,7 @@ type Pins = {
 
 test('pins survive a restart as border-only pins with their saved picture, and come back onto the screen', async () => {
   const userData = mkdtempSync(join(tmpdir(), 'ib-restart-'))
-  const env = { ...process.env, INSTANT_TEST_PINS: '1' }
+  const env = { ...process.env, INSTANT_TEST_PINS: '1', INSTANT_TEST_NO_POLL: '1' }
 
   // First run: collapse a window to a pin, then quit.
   app = await electron.launch({ args: ['.', `--user-data-dir=${userData}`, `${base}/`], env })
@@ -70,6 +70,11 @@ test('pins survive a restart as border-only pins with their saved picture, and c
     return { state: pin!.state, hasPage: manager.hasPage(pin!.id), inside, url: pin!.url }
   })
   expect(result).toEqual({ state: 'offloaded', hasPage: false, inside: true, url: `${base}/` })
+  // A released pin has NO page process while nobody touches it: only the bare shell is on screen.
+  const pinPages = () => app!.evaluate(({ webContents }) => webContents.getAllWebContents().filter((w) => w.getURL().includes('/pin/')).length)
+  expect(await pinPages()).toBe(0)
+  // Starting the pin window (what the pointer on the pin does) gives the border-only look.
+  await app.evaluate(() => { const m = (globalThis as unknown as { __pins: Pins & { windowOf(id: string): unknown } }).__pins; m.windowOf(m.liveIds()[0]!) })
   await expect.poll(async () => app!.evaluate(async ({ webContents }) => {
     const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('/pin/'))
     return (await wc?.executeJavaScript("document.getElementById('circle').dataset.state")) as string

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { PinStore } from '../../src/main/pins/pinStore'
 import { contrast, generateGradient, hueDistance, hslToRgb, luminance, stopIsVisible } from '../../src/shared/pins/gradient'
 import {
-  PIN_STORE_VERSION, archivePin, clampPoint, clampRect, createPin, labelOf, normalizeLabel, parsePinFile,
+  PIN_STORE_VERSION, archivePin, clampPoint, clampRect, createPin, labelOf, normalizeLabel, parsePinFile, windowForPin,
   type GradientSpec, type PinRecord
 } from '../../src/shared/pins/model'
 import { DEFAULT_SETTINGS, PIN_LIMITS, PIN_SIZES, mergeSettings } from '../../src/shared/settings'
@@ -122,7 +122,7 @@ describe('pin store', () => {
   it('writes the file private to the user and leaves no temporary file', () => {
     const dir = fresh()
     new PinStore(dir).put(make('pin-00000001'))
-    expect(statSync(join(dir, 'pins.json')).mode & 0o777).toBe(0o600)
+    if (process.platform !== 'win32') expect(statSync(join(dir, 'pins.json')).mode & 0o777).toBe(0o600) // file modes mean nothing on Windows
     expect(readdirSync(dir).filter((n) => n.endsWith('.tmp'))).toEqual([])
     expect(JSON.parse(readFileSync(join(dir, 'pins.json'), 'utf8')).version).toBe(PIN_STORE_VERSION)
   })
@@ -154,6 +154,7 @@ describe('pin settings', () => {
     const t = mergeSettings({ pinSize: 500, maxPins: 1, autoOffloadMinutes: 9999, autoOffloadMemoryGB: 0.01 })
     expect([t.pinSize, t.maxPins, t.autoOffloadMinutes, t.autoOffloadMemoryGB]).toEqual([37, 4, 240, 0.5])
     expect(mergeSettings({ pinSize: 'big' }).pinSize).toBe(28)
+    expect([mergeSettings({ pinArmMs: -5 }).pinArmMs, mergeSettings({ pinArmMs: 999999 }).pinArmMs, mergeSettings({}).pinArmMs, mergeSettings({ pinArmMs: 1250 }).pinArmMs]).toEqual([0, 30000, 2000, 1250])
   })
 })
 
@@ -167,5 +168,21 @@ describe('pin sizes', () => {
     for (const v of values) expect(mergeSettings({ pinSize: v }).pinSize).toBe(v)
     expect(values[0]).toBe(PIN_LIMITS.size.min)
     expect(values[6]).toBe(PIN_LIMITS.size.max)
+  })
+})
+
+describe('where a window opens for its pin', () => {
+  const win = { x: 500, y: 300, width: 480, height: 640 }
+  it('puts the button on the pin', () => {
+    expect(windowForPin(win, { x: 40, y: 24 }, { x: 900, y: 120 })).toEqual({ x: 860, y: 96, width: 480, height: 640 })
+  })
+  it('uses the middle of the top bar for an old pin that has no saved button place', () => {
+    expect(windowForPin(win, null, { x: 900, y: 120 })).toEqual({ x: 660, y: 96, width: 480, height: 640 })
+  })
+  it('can be kept on screen when the pin is near an edge', () => {
+    const screen = [{ x: 0, y: 25, width: 1440, height: 800 }]
+    const placed = clampRect(windowForPin(win, { x: 40, y: 24 }, { x: 1430, y: 800 }), screen, 0)
+    expect(placed.x + placed.width).toBeLessThanOrEqual(1440)
+    expect(placed.y + placed.height).toBeLessThanOrEqual(825)
   })
 })

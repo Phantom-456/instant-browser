@@ -64,6 +64,7 @@ button { font: inherit; color: inherit; border: 0; padding: 0; background: none;
 .fill { isolation: isolate; }
 .icon { position: relative; display: grid; place-items: center; width: 100%; height: 100%; color: var(--ink-on); transition: color 0.35s var(--ease); }
 .icon svg { width: 56%; height: 56%; fill: currentColor; }
+.icon img { width: 62%; height: 62%; object-fit: contain; border-radius: 22%; background: rgba(255, 255, 255, 0.82); padding: 1px; box-sizing: border-box; }
 /* Border only (offloaded): no fill, the ring and the icon take the pin's colour. */
 .circle[data-state='offloaded'] .fill { opacity: 0; }
 .circle[data-state='offloaded'] .icon { color: var(--accent); }
@@ -113,12 +114,12 @@ body[data-phase='arming'] .bubble { background: transparent; box-shadow: none; -
 body[data-phase='arming'] .bubble { border-color: var(--wire); }
 body[data-phase='arming'] .circle { filter: none; }
 body[data-phase='arming'] .base { opacity: 1; }
-body[data-phase='arming'] .draw { animation: draw 2s linear forwards; }
+body[data-phase='arming'] .draw { animation: draw var(--arm, 2000ms) linear forwards; }
 @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 /* Back to idle (the pointer left): the border is complete again, with no animation. */
 
 @media (prefers-reduced-motion: reduce) {
   .part { transform: none; }
-  body[data-phase='arming'] .draw { animation: fadein 2s linear forwards; stroke-dashoffset: 0; }
+  body[data-phase='arming'] .draw { animation: fadein var(--arm, 2000ms) linear forwards; stroke-dashoffset: 0; }
   @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 }

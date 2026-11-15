@@ -46,6 +46,8 @@ function freePath(folder: string, filename: string): string {
 export function initWebSession(deps: { settings: SettingsFile; permissions: PermissionFile }): Session {
   const { settings, permissions } = deps
   const ses = session.fromPartition('persist:instant')
+  // The swipe preload: it only watches the trackpad in pages (see preload/page.ts).
+  ses.registerPreloadScript({ type: 'frame', filePath: join(__dirname, '../preload/page.js') })
 
   // Permission prompt. Anything not in PROMPT_PERMISSIONS is denied without asking.
   ses.setPermissionRequestHandler((wc, permission, callback, details) => {

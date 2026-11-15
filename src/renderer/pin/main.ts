@@ -22,7 +22,23 @@ el<HTMLSpanElement>('offload-icon').innerHTML = ICONS.offload ?? ''
 const cd = offload.querySelector('.cd') as SVGSVGElement
 const cdLeft = offload.querySelector('.left') as SVGCircleElement
 remove.innerHTML = ICONS.close ?? ''
-el<HTMLSpanElement>('icon').innerHTML = ICONS.collapse ?? '' // the same pin icon as the toolbar button
+const iconEl = el<HTMLSpanElement>('icon')
+let shownIcon: string | null | undefined
+/** The website's own icon when it has one; otherwise the same pin icon as the toolbar button. */
+function setIcon(icon: string | null): void {
+  if (icon === shownIcon) return
+  shownIcon = icon
+  if (icon) {
+    const img = document.createElement('img')
+    img.alt = ''
+    img.src = icon
+    img.onerror = () => { shownIcon = undefined; setIcon(null) } // a broken picture falls back to the pin icon
+    iconEl.replaceChildren(img)
+  } else {
+    iconEl.innerHTML = ICONS.collapse ?? ''
+  }
+}
+setIcon(null)
 
 const rename = el<HTMLInputElement>('rename')
 const labelEl = el<HTMLSpanElement>('label')
@@ -59,6 +75,8 @@ function render(next: PinView): void {
   root.style.setProperty('--accent', next.accent)
   root.style.setProperty('--ink-on', next.ink === 'black' ? '#111' : '#fff')
   root.dataset.theme = next.dark ? 'dark' : 'light'
+  setIcon(next.icon)
+  root.style.setProperty('--arm', `${next.armMs}ms`)
 
   // The gradient for the borders that draw themselves (SVG), from the pin's own colours and angle.
   const rad = ((next.angle - 90) * Math.PI) / 180

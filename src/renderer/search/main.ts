@@ -19,11 +19,11 @@ const results = document.getElementById('results') as HTMLElement
 mountIcons()
 
 const FIELD_HEIGHT = 60 // the text field row
-const EMPTY: BarResults = { query: '', settings: [], searches: [], pages: [] }
+const EMPTY: BarResults = { query: '', searches: [], pages: [] }
 
 /** One thing the user can pick. */
 interface Item {
-  type: 'setting' | 'search' | 'suggest' | 'page'
+  type: 'search' | 'suggest' | 'page'
   label: string
   /** Text for a search, address for a page, section for a setting. */
   value: string
@@ -49,11 +49,9 @@ const hostOf = (url: string) => { try { return new URL(url).host.replace(/^www\.
 
 function groups(): Group[] {
   const out: Group[] = []
-  const settings: Item[] = local.settings.map((b) => ({ type: 'setting', label: b.label, value: b.section }))
   const searches: Item[] = local.searches.map((s) => ({ type: 'search', label: s.term, value: s.term, tags: tagsOf(s.sources) }))
   const pages: Item[] = local.pages.map((p) => ({ type: 'page', label: p.title, value: p.url, sub: hostOf(p.url), tags: tagsOf(p.sources) }))
   if (typed.trim() === '') {
-    if (settings.length) out.push({ title: 'Quick settings', style: 'bubbles', items: settings })
     if (searches.length) out.push({ title: 'Recent searches', style: 'bubbles', items: searches })
     if (pages.length) out.push({ title: 'Recently visited', style: 'rows', items: pages })
     return out
@@ -64,19 +62,17 @@ function groups(): Group[] {
     .slice(0, 6)
     .map((t) => ({ type: 'suggest', label: t, value: t }))
   // Your own history comes first: it is about you. The search engine's suggestions follow.
-  if (settings.length) out.push({ title: 'Settings', style: 'bubbles', items: settings })
   if (searches.length || pages.length) out.push({ title: 'From your history', style: 'rows', items: [...searches, ...pages] })
   if (suggestions.length) out.push({ title: 'Suggestions', style: 'rows', items: suggestions })
   return out
 }
 
 function iconFor(item: Item): string {
-  return ICONS[item.type === 'setting' ? 'general' : item.type === 'search' ? 'history' : item.type === 'page' ? 'globe' : 'search'] ?? ''
+  return ICONS[item.type === 'search' ? 'history' : item.type === 'page' ? 'globe' : 'search'] ?? ''
 }
 
 function activate(item: Item): void {
-  if (item.type === 'setting') api.openSettings(item.value)
-  else api.submit(item.value)
+  api.submit(item.value)
 }
 
 function draw(): void {
@@ -140,7 +136,7 @@ function draw(): void {
 function select(index: number): void {
   selected = index
   const item = flat[index]
-  // Searches and suggestions fill the field, so the user can change them. Pages and settings do not.
+  // Searches and suggestions fill the field, so the user can change them. Pages do not.
   input.value = item && (item.type === 'search' || item.type === 'suggest') ? item.value : typed
   draw()
 }
@@ -164,9 +160,32 @@ async function refresh(text: string): Promise<void> {
   }, 90)
 }
 
+/** A small X shows on the left, in place of the magnifier, while there is text. Pressing it clears the field. */
+const glass = document.getElementById('glass') as HTMLButtonElement
+function syncClear(): void {
+  const has = input.value.length > 0
+  glass.classList.toggle('clear', has)
+  glass.innerHTML = (has ? ICONS.close : ICONS.search) ?? ''
+  glass.title = has ? 'Clear' : ''
+  glass.setAttribute('aria-label', has ? 'Clear the text' : 'Search')
+  glass.tabIndex = -1
+}
+glass.addEventListener('mousedown', (event) => {
+  event.preventDefault() // keep the focus in the text field
+  if (!glass.classList.contains('clear')) return
+  input.value = ''
+  typed = ''
+  remote = []
+  syncClear()
+  void refresh('')
+  input.focus()
+})
+syncClear()
+
 input.addEventListener('input', () => {
   typed = input.value
   remote = []
+  syncClear()
   void refresh(typed)
 })
 
@@ -180,11 +199,13 @@ api.onShow(() => {
   card.classList.remove('enter')
   void card.offsetWidth // restart the entrance animation each time the bar opens
   card.classList.add('enter')
-  input.value = ''
-  typed = ''
+  // What was typed last time stays. It is selected, so typing replaces it and one key press clears it.
+  typed = input.value
   remote = []
-  void refresh('')
+  syncClear()
+  void refresh(typed)
   input.focus()
+  input.select()
 })
 
 input.addEventListener('keydown', (event) => {
@@ -204,7 +225,7 @@ input.addEventListener('keydown', (event) => {
     void refresh(typed)
   } else if (event.key === 'Enter') {
     const item = flat[selected]
-    if (item && (item.type === 'setting' || item.type === 'page')) activate(item)
+    if (item && item.type === 'page') activate(item)
     else if (input.value.trim()) api.submit(input.value)
   } else if (event.key === 'Escape') {
     api.cancel()

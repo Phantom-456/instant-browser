@@ -167,7 +167,7 @@ function sectionRows(section: Section): HTMLElement[] {
       return [
         hotkeyRow(),
         row('Start when I log in', '', toggle('launchAtLogin')),
-        row('Keep a window ready', 'Opens the next small window at once. It keeps a hidden window waiting, which uses about 180 MB of memory. It is let go after 10 minutes without use.', toggle('warmWindow')),
+        row('Keep a window ready', 'Opens the next small window at once. It keeps a hidden window waiting, which uses about 40 MB of memory. It is let go after 10 minutes without use.', toggle('warmWindow')),
         row('Main browser', 'Where "send to browser" opens pages.',
           select(view.browsers.map((b) => ({ label: b.name, value: b.id })), s.mainBrowserId ?? view.browsers[0]?.id ?? '', (mainBrowserId) => void save({ mainBrowserId }))),
         ...(view.browsers.some((b) => b.id === DIA_ID) ? [diaProfileRow()] : []),
@@ -206,8 +206,10 @@ function sectionRows(section: Section): HTMLElement[] {
       return [
         row('Pin size', 'How big a pin is on the desktop. Default is the size of the pin button in the toolbar.',
           select(PIN_SIZES.map((p) => ({ label: p.label, value: String(p.value) })), String(nearest.value), (value) => void save({ pinSize: Number(value) }))),
-        row('Most pins at once', `4 to 40. Every pin is its own small window and uses about 80 MB of memory, even after Offload. With ${s.maxPins} pins that is about ${s.maxPins * 80} MB.`,
+        row('Most pins at once', '4 to 40. A pin whose page is alive has a small window of its own, about 20 MB (macOS memory figure). A pin whose page is released has no page process and uses almost nothing, until you point at it.',
           numberBox(s.maxPins, 4, 40, 1, (maxPins) => void save({ maxPins }))),
+        row('Wait before a pin takes clicks (seconds)', 'How long the pointer must rest on a pin before it opens and takes clicks. Until then clicks go through to the app behind it. 0 means at once. You can use decimals, down to a thousandth: 1.1, 1.25, 0.5. Up to 30.',
+          numberBox(s.pinArmMs / 1000, 0, 30, 0.1, (seconds) => void save({ pinArmMs: Math.round(seconds * 1000) }))),
         row('Offload pins I have not used', 'Offload releases the memory of a collapsed page. The pin stays and the page loads again when you open it. A ring on the Offload bubble shows the time left. Click that bubble to pause it (the page then stays in memory). Right-click to go on.',
           toggle('autoOffloadInactivity')),
         row('Minutes without use', '5 to 240. Starts when you collapse a window, and starts again when you open it.',

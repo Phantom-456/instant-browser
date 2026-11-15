@@ -4,11 +4,13 @@ import { mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AddressInfo } from 'node:net'
+import { createServer as createTcpServer, type AddressInfo } from 'node:net'
 
 let server: Server
 let base: string
 let lastGpc: string | undefined
+/** An address where nothing listens (the connection is refused). Port 9 would not do: Chromium blocks it as an unsafe port. */
+let closedUrl = ''
 let app: ElectronApplication
 
 test.beforeAll(async () => {
@@ -20,6 +22,10 @@ test.beforeAll(async () => {
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const probe = createTcpServer()
+  await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve))
+  closedUrl = `http://127.0.0.1:${(probe.address() as AddressInfo).port}/`
+  await new Promise<void>((resolve) => probe.close(() => resolve()))
 })
 
 test.afterAll(async () => {
@@ -294,7 +300,7 @@ test.describe('search bar history and bubbles', () => {
     const userData = mkdtempSync(join(tmpdir(), 'ib-bar-'))
     writeFileSync(join(userData, 'settings.json'), JSON.stringify(settings))
     const bar = await electron.launch({
-      args: ['.', `--user-data-dir=${userData}`, 'http://127.0.0.1:9/'],
+      args: ['.', `--user-data-dir=${userData}`, closedUrl],
       env: { ...process.env, INSTANT_TEST: '1', INSTANT_TEST_MASK: '0', INSTANT_TEST_DEFAULT: '0', INSTANT_TEST_HISTORY: makeFixtures() } as Record<string, string>
     })
     await bar.firstWindow()
@@ -307,18 +313,18 @@ test.describe('search bar history and bubbles', () => {
       }
       throw new Error('search bar page not found')
     }
-    type Q = { query(t: string): Promise<{ settings: Array<{ label: string }>; searches: Array<{ term: string; sources: string[] }>; pages: Array<{ title: string; sources: string[] }> }> }
+    type Q = { query(t: string): Promise<{ searches: Array<{ term: string; sources: string[] }>; pages: Array<{ title: string; sources: string[] }> }> }
     const query = async (text: string) => (await page()).evaluate((t) => (window as unknown as { instantSearch: Q }).instantSearch.query(t), text)
     return { bar, page, query }
   }
 
-  test('nothing typed: recent searches and pages from all browsers, and settings bubbles', async () => {
+  test('nothing typed: recent searches and pages from all browsers (no settings in the list)', async () => {
     const { bar, query } = await launchWithHistory()
     try {
       // The history is built a moment after start.
       await expect.poll(async () => (await query('')).searches.length, { timeout: 10_000 }).toBeGreaterThanOrEqual(3)
       const empty = await query('')
-      expect(empty.settings.map((b) => b.label)).toEqual(['Settings', 'Hotkey', 'Search engine', 'Privacy'])
+      expect(Object.keys(empty)).not.toContain('settings') // the quick settings moved to the bubble beside the bar
       // The same search in two browsers is one entry that names both.
       const aws = empty.searches.find((s) => s.term === 'aws lambda cold start')!
       expect([...aws.sources].sort()).toEqual(['Dia', 'Google Chrome'])
@@ -331,13 +337,12 @@ test.describe('search bar history and bubbles', () => {
     }
   })
 
-  test('typing: matching history, and matching settings bubbles', async () => {
+  test('typing: matching history', async () => {
     const { bar, query } = await launchWithHistory()
     try {
       await expect.poll(async () => (await query('aws')).searches.length, { timeout: 10_000 }).toBe(2)
       const typed = await query('aws')
       expect(typed.pages.map((p) => p.title)).toEqual(['AWS Lambda'])
-      expect((await query('hot')).settings.map((b) => b.label)).toEqual(['Hotkey'])
       expect((await query('zzzz')).searches).toEqual([])
     } finally {
       await bar.close()
@@ -351,7 +356,6 @@ test.describe('search bar history and bubbles', () => {
       const empty = await query('')
       expect(empty.searches).toEqual([])
       expect(empty.pages).toEqual([])
-      expect(empty.settings.length).toBe(4) // the settings bubbles stay
     } finally {
       await bar.close()
     }
@@ -427,7 +431,7 @@ test.describe('speed: a ready window, instant feedback, history in another proce
       const [spare] = await miniInfo(a)
       expect(spare!.visible).toBe(false) // nobody sees it
       const bar = await searchPage(a)
-      await bar.evaluate(() => (window as unknown as { instantSearch: { submit(t: string): void } }).instantSearch.submit('http://127.0.0.1:9/'))
+      await bar.evaluate((u) => (window as unknown as { instantSearch: { submit(t: string): void } }).instantSearch.submit(u), closedUrl)
       await expect.poll(async () => (await miniInfo(a)).filter((w) => w.visible).length, { timeout: 5000 }).toBe(1)
       const shown = (await miniInfo(a)).find((w) => w.visible)!
       expect(shown.id).toBe(spare!.id) // the ready window was used

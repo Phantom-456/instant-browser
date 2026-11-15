@@ -13,7 +13,8 @@ export default defineConfig({
           pin: resolve(__dirname, 'src/preload/pin.ts'),
           preview: resolve(__dirname, 'src/preload/preview.ts'),
           manager: resolve(__dirname, 'src/preload/manager.ts'),
-          bubble: resolve(__dirname, 'src/preload/bubble.ts')
+          bubble: resolve(__dirname, 'src/preload/bubble.ts'),
+          page: resolve(__dirname, 'src/preload/page.ts')
         }
       }
     }

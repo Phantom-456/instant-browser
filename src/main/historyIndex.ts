@@ -1,7 +1,6 @@
 import { utilityProcess, type UtilityProcess } from 'electron'
 import { rmSync, statSync } from 'node:fs'
 import { buildHistory, findHistory, mergeHistory, recentPages, recentSearches, type History, type RawVisit } from '../shared/history'
-import { DEFAULT_BUBBLES, matchBubbles } from '../shared/bubbles'
 import type { BarResults } from '../shared/ipc'
 import type { Settings } from '../shared/settings'
 import type { ScanRequest, ScanResult } from './historyWorker'
@@ -131,7 +130,6 @@ export class HistoryIndex {
     if (q === '') {
       return {
         query: q,
-        settings: DEFAULT_BUBBLES,
         searches: showHistory ? recentSearches(this.history, 8, now).map((s) => ({ term: s.term, sources: s.sources })) : [],
         pages: showHistory ? recentPages(this.history, 4, now).map((p) => ({ title: p.title, url: p.url, sources: p.sources })) : []
       }
@@ -139,7 +137,6 @@ export class HistoryIndex {
     const found = showHistory ? findHistory(this.history, q, now, { searches: 4, pages: 4 }) : { searches: [], pages: [] }
     return {
       query: q,
-      settings: matchBubbles(q),
       searches: found.searches.map((s) => ({ term: s.term, sources: s.sources })),
       pages: found.pages.map((p) => ({ title: p.title, url: p.url, sources: p.sources }))
     }

@@ -41,9 +41,9 @@ export function portablePrefs(settings: Settings): Partial<Pick<Settings, Portab
 /** A pin that came from another computer, as a local record: released, placed by the receiving computer. */
 export function fromSyncPin(pin: SyncPin, place: { x: number; y: number }, now: number): PinRecord {
   return {
-    id: pin.id, url: pin.url, title: pin.title, label: pin.label, state: 'offloaded', archived: pin.archived,
+    id: pin.id, url: pin.url, title: pin.title, label: pin.label, icon: null, state: 'offloaded', archived: pin.archived,
     archivedAt: pin.archived ? now : null, following: false, gradient: pin.gradient,
-    window: { x: place.x, y: place.y, width: 480, height: 640 }, pin: place, scroll: null, snapshotAt: null,
+    window: { x: place.x, y: place.y, width: 480, height: 640 }, anchor: null, pin: place, scroll: null, snapshotAt: null,
     createdAt: pin.createdAt, lastUsedAt: now, restoredAt: null
   }
 }

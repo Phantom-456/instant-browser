@@ -232,12 +232,12 @@ if (!app.requestSingleInstanceLock()) {
     const bubbles = new SearchBubbles(searchBar.window, { openSettings: (section) => settingsWindow?.open(section), openManager: () => managerWindow?.open(), closeBar: () => searchBar.hide() })
     if (process.env.INSTANT_TEST_PINS === '1') { (globalThis as Record<string, unknown>).__bubbles = bubbles; (globalThis as Record<string, unknown>).__searchBar = searchBar } // tests only
     const hotkey = settings.get().hotkey
-    const hotkeyOk = registerHotkey(hotkey, () => searchBar.show())
+    const hotkeyOk = registerHotkey(hotkey, () => searchBar.toggle())
     settingsWindow = new SettingsWindow(
       {
         settings,
         permissions,
-        applyHotkey: (accelerator) => registerHotkey(accelerator, () => searchBar.show()),
+        applyHotkey: (accelerator) => registerHotkey(accelerator, () => searchBar.toggle()),
         pauseHotkey: () => unregisterHotkey(),
         ownHistory,
         refreshHistory: () => history.rescan(),

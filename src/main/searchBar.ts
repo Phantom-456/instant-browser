@@ -24,7 +24,7 @@ export function rendererPage(name: 'search' | 'toolbar' | 'settings' | 'pin' | '
   return dev ? { url: `${dev}/${name}/index.html` } : { file: join(__dirname, `../renderer/${name}/index.html`) }
 }
 
-export function preloadPath(name: 'search' | 'toolbar' | 'settings' | 'pin' | 'preview' | 'manager' | 'bubble'): string {
+export function preloadPath(name: 'search' | 'toolbar' | 'settings' | 'pin' | 'preview' | 'manager' | 'bubble' | 'page'): string {
   return join(__dirname, `../preload/${name}.js`)
 }
 
@@ -130,5 +130,11 @@ export class SearchBar {
 
   hide(): void {
     if (this.win.isVisible()) this.win.hide()
+  }
+
+  /** The hotkey: open the bar, or close it if it is open already. */
+  toggle(): void {
+    if (this.win.isVisible()) this.hide()
+    else this.show()
   }
 }

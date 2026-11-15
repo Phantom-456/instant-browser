@@ -1,5 +1,5 @@
-import { BaseWindow, WebContentsView, dialog, ipcMain, nativeTheme, screen, shell, systemPreferences, type Input, type WebContents } from 'electron'
-import { PREVIEW_ACTION, PREVIEW_STATE, TOOLBAR_ACTION, TOOLBAR_STATE, type PreviewAction, type PreviewState, type ToolbarAction, type ToolbarState } from '../shared/ipc'
+import { BaseWindow, WebContentsView, dialog, ipcMain, nativeImage, nativeTheme, screen, shell, systemPreferences, type Input, type WebContents } from 'electron'
+import { PAGE_SWIPE, PAGE_SWIPE_CAN, PREVIEW_ACTION, PREVIEW_STATE, TOOLBAR_ACTION, TOOLBAR_STATE, type PreviewAction, type PreviewState, type ToolbarAction, type ToolbarState } from '../shared/ipc'
 import { httpFallback } from '../shared/httpsFirst'
 import { placeNear } from '../shared/placement'
 import { resolveInput } from '../shared/resolveInput'
@@ -29,6 +29,18 @@ const lerpRect = (a: R, b: R, t: number): R => {
   const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2 // ease in and out
   const k = (x: number, y: number) => Math.round(x + (y - x) * e)
   return { x: k(a.x, b.x), y: k(a.y, b.y), width: Math.max(1, k(a.width, b.width)), height: Math.max(1, k(a.height, b.height)) }
+}
+
+/**
+ * The window between two sizes while the point `pin` stays fixed on the same spot of the window: the Collapse button (or
+ * the pin). The window then shrinks into the pin and grows out of it without the pin ever moving.
+ */
+const lerpAnchored = (a: R, b: R, pin: { x: number; y: number }, t: number): R => {
+  const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
+  const mix = (x: number, y: number) => x + (y - x) * e
+  const ax = mix(pin.x - a.x, pin.x - b.x)
+  const ay = mix(pin.y - a.y, pin.y - b.y)
+  return { x: Math.round(pin.x - ax), y: Math.round(pin.y - ay), width: Math.max(1, Math.round(mix(a.width, b.width))), height: Math.max(1, Math.round(mix(a.height, b.height))) }
 }
 
 /** Run `step(t)` for t from 0 to 1 over `ms`, about 60 times a second. */
@@ -93,6 +105,8 @@ export type MiniHandle = MiniWindow
 interface MiniWindow {
   /** A number for the manager list. */
   id: number
+  /** The address of the page's icon, when it has one. */
+  faviconUrl: string | null
   /** Hidden because it was collapsed to a pin. The page stays alive. */
   collapsed: boolean
   /** The saved preview that covers the page while an offloaded pin loads again. */
@@ -127,6 +141,23 @@ export class MiniWindowManager {
   private readonly byToolbarId = new Map<number, MiniWindow>()
 
   constructor(private readonly deps: MiniWindowDeps) {
+    // A two-finger swipe in a page (see preload/page.ts): only the page of one of our windows may ask.
+    const miniOfPage = (id: number): MiniWindow | undefined => {
+      for (const mini of this.byToolbarId.values()) if (!mini.win.isDestroyed() && mini.page.webContents.id === id) return mini
+      return undefined
+    }
+    ipcMain.handle(PAGE_SWIPE_CAN, (event, direction: unknown) => {
+      const mini = miniOfPage(event.sender.id)
+      if (!mini) return false
+      const h = mini.page.webContents.navigationHistory
+      return direction === 'back' ? h.canGoBack() : direction === 'forward' ? h.canGoForward() : false
+    })
+    ipcMain.on(PAGE_SWIPE, (event, direction: unknown) => {
+      const mini = miniOfPage(event.sender.id)
+      if (!mini) return
+      if (direction === 'back') this.handleAction(mini, { type: 'back' })
+      else if (direction === 'forward') this.handleAction(mini, { type: 'forward' })
+    })
     ipcMain.on(TOOLBAR_ACTION, (event, action: ToolbarAction) => {
       const mini = this.byToolbarId.get(event.sender.id)
       if (mini) this.handleAction(mini, action)
@@ -170,7 +201,7 @@ export class MiniWindowManager {
 
   /**
    * Keep one hidden window ready, so the next one opens at once (its processes, toolbar and web session are
-   * already started). A ready window uses about 180 MB of memory, so it is released after 10 minutes without use.
+   * already started). A ready window uses about 40 MB of memory, so it is released after 10 minutes without use.
    */
   warm(): void {
     if (this.disposed || this.spare || !this.deps.settings.get().warmWindow) return
@@ -280,7 +311,7 @@ export class MiniWindowManager {
       mini.preview?.setBounds(pageBounds)
     }
     const mini: MiniWindow = {
-      win, toolbar, page, layout, id: ++nextMiniId, collapsed: false, preview: null,
+      win, toolbar, page, layout, id: ++nextMiniId, faviconUrl: null, collapsed: false, preview: null,
       pinned: settings.alwaysOnTop, following: false, error: null,
       pendingUrl: '', starting: false, ignoreResizeUntil: 0
     }
@@ -307,7 +338,8 @@ export class MiniWindowManager {
 
     const wc = page.webContents
     const push = () => this.pushState(mini)
-    wc.on('did-navigate', () => { mini.error = null; push() })
+    wc.on('page-favicon-updated', (_event, icons) => { mini.faviconUrl = icons[icons.length - 1] ?? null })
+    wc.on('did-navigate', () => { mini.error = null; mini.faviconUrl = null; push() })
     wc.on('did-navigate-in-page', push)
     wc.on('page-title-updated', push)
     wc.on('did-start-loading', () => { mini.starting = false; push() })
@@ -439,7 +471,7 @@ export class MiniWindowManager {
     win.setMinimumSize(1, 1)
     await animate(collapseMs(), (t) => {
       if (win.isDestroyed()) return
-      win.setBounds(lerpRect(from, to, t))
+      win.setBounds(lerpAnchored(from, to, centre, t))
       win.setOpacity(t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3)
     })
     if (win.isDestroyed()) return
@@ -470,7 +502,7 @@ export class MiniWindowManager {
     win.show()
     await animate(collapseMs(), (t) => {
       if (win.isDestroyed()) return
-      win.setBounds(lerpRect(start, to, t))
+      win.setBounds(lerpAnchored(start, to, from, t))
       win.setOpacity(Math.min(1, t / 0.3))
     })
     if (win.isDestroyed()) return
@@ -499,6 +531,34 @@ export class MiniWindowManager {
       unsentText = info.unsent
     } catch { /* a page that cannot be asked: no scroll, no warning */ }
     return { png, scroll, unsentText, title: wc.getTitle(), url: currentUrl(mini) }
+  }
+
+  /**
+   * The website's own icon as a small picture (a data address), or null when the page has none. It is fetched with the
+   * page's own session, shrunk to 64 pixels, and kept only if it is small. A page that has just loaded may not have told
+   * us its icon yet, so we wait a moment for it.
+   */
+  async faviconData(mini: MiniHandle, waitMs = 900): Promise<string | null> {
+    const started = Date.now()
+    while (!mini.faviconUrl && Date.now() - started < waitMs && !mini.win.isDestroyed()) await new Promise((r) => setTimeout(r, 100))
+    const url = mini.faviconUrl
+    if (!url || !/^https?:|^data:image\//i.test(url)) return null
+    try {
+      const response = await getWebSession().fetch(url, { signal: AbortSignal.timeout(3000) })
+      if (!response.ok) return null
+      const type = (response.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase()
+      const bytes = Buffer.from(await response.arrayBuffer())
+      if (bytes.length === 0 || bytes.length > 400_000) return null
+      if (type === 'image/svg+xml') return bytes.length <= 12_000 ? `data:image/svg+xml;base64,${bytes.toString('base64')}` : null
+      const image = nativeImage.createFromBuffer(bytes)
+      if (image.isEmpty()) return null
+      const { width } = image.getSize()
+      const small = width > 64 ? image.resize({ width: 64, quality: 'best' }) : image
+      const png = small.toPNG()
+      return png.length <= 40_000 ? `data:image/png;base64,${png.toString('base64')}` : null
+    } catch {
+      return null
+    }
   }
 
   /** Is sound playing from this page? */

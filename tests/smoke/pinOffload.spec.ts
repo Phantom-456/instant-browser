@@ -72,7 +72,7 @@ async function arm(id: string) {
 
 test('Offload frees the page and keeps a picture; opening the pin shows the preview, then the live page at the same scroll', async () => {
   userData = mkdtempSync(join(tmpdir(), 'ib-offload-'))
-  app = await electron.launch({ args: ['.', `--user-data-dir=${userData}`, `${base}/`], env: { ...process.env, INSTANT_TEST_PINS: '1' } })
+  app = await electron.launch({ args: ['.', `--user-data-dir=${userData}`, `${base}/`], env: { ...process.env, INSTANT_TEST_PINS: '1', INSTANT_TEST_NO_POLL: '1', INSTANT_TEST_DEMOTE_MS: '99999999' } })
   await expect.poll(visibleMini).toBe(1)
   await expect.poll(() => pagejs('document.readyState')).toBe('complete')
   await pagejs('window.scrollTo(0, 600)')
@@ -99,7 +99,7 @@ test('Offload frees the page and keeps a picture; opening the pin shows the prev
   const file = join(userData, 'pins', 'snapshots', `${id}.png`)
   expect(existsSync(file)).toBe(true)
   expect(statSync(file).size).toBeGreaterThan(500)
-  expect(statSync(file).mode & 0o777).toBe(0o600)
+  if (process.platform !== 'win32') expect(statSync(file).mode & 0o777).toBe(0o600)
   expect((await pins())[0]!.scroll?.y).toBe(600)
 
   // Open it again: the window grows, the saved preview shows, then the live page loads and the preview goes.

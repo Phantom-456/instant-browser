@@ -17,6 +17,7 @@ export function installTestPin(diameter: () => number): void {
   )
   const pin = new PinWindow(record, centre, {
     diameter,
+    armMs: () => Number(process.env.INSTANT_TEST_ARM_MS ?? 2000),
     workAreaFor: (p) => screen.getDisplayNearestPoint({ x: Math.round(p.x), y: Math.round(p.y) }).workArea,
     onEvent: (_id, event) => { events.push(event) }
   })

@@ -15,6 +15,8 @@ export type PinOut =
 
 export interface PinWindowDeps {
   diameter: () => number
+  /** How long the pointer must rest on the pin before it takes clicks. */
+  armMs?: () => number
   /** The usable screen area (without the menu bar and the Dock) around a point. */
   workAreaFor: (point: Point) => Rect
   onEvent: (id: string, event: PinOut) => void
@@ -85,10 +87,27 @@ export class PinWindow {
     nativeTheme.on('updated', this.onTheme)
   }
 
+  private armMs = (): number => this.deps.armMs?.() ?? 2000
   private now = () => (this.deps.now ?? Date.now)()
   get id(): string { return this.record.id }
   get centrePoint(): Point { return this.centre }
   isDestroyed(): boolean { return this.destroyed || this.win.isDestroyed() }
+
+  /** The pointer is on the pin already (the window was started because of that): start arming at once. */
+  hoverNow(): void {
+    if (!this.isDestroyed() && this.arm.phase === 'idle') this.step('enter')
+  }
+
+  /** Nothing is happening: the pin is closed, nobody drags or renames it. */
+  isAtRest(): boolean {
+    return this.arm.phase === 'idle' && !this.shrinkPending && !this.dragging && !this.renaming
+  }
+
+  /** Call back once the page of the pin window has drawn (the bare shell under it can go then). */
+  onReady(callback: () => void): void {
+    if (this.loaded) callback()
+    else this.win.webContents.once('did-finish-load', () => setTimeout(callback, 60))
+  }
 
   show(): void {
     if (!this.isDestroyed()) this.win.showInactive()
@@ -185,7 +204,7 @@ export class PinWindow {
 
   private step(event: ArmEvent): void {
     const before = this.arm
-    this.arm = stepArming(this.arm, event, this.now())
+    this.arm = stepArming(this.arm, event, this.now(), this.armMs())
     if (before.phase === 'idle' && this.arm.phase === 'arming') {
       this.side = chooseSide(this.centre, this.deps.diameter(), this.deps.workAreaFor(this.centre)) // locked until the pin closes
       this.shrinkPending = false
@@ -200,7 +219,7 @@ export class PinWindow {
   private scheduleTick(): void {
     if (this.tickTimer) clearTimeout(this.tickTimer)
     this.tickTimer = null
-    const at = nextTickAt(this.arm)
+    const at = nextTickAt(this.arm, this.armMs())
     if (at === null) return
     this.tickTimer = setTimeout(() => {
       this.tickTimer = null
@@ -282,12 +301,14 @@ export class PinWindow {
       label,
       address: prettyUrl(this.record.url),
       following: this.record.following,
+      icon: this.record.icon,
       state: this.record.state,
       gradient: gradientCss(this.record.gradient),
       accent: stopCss(stops[0]!),
       stops: stops.map(stopCss),
       angle: this.record.gradient.angle,
       dark: nativeTheme.shouldUseDarkColors,
+      armMs: this.armMs(),
       ink: readableText(luminance(hslToRgb(mid.h, mid.s, mid.l))),
       phase: this.arm.phase,
       dragging: this.dragging,

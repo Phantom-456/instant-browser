@@ -23,13 +23,14 @@ export type ArmEvent = 'enter' | 'leave' | 'tick'
 
 export const IDLE: ArmState = { phase: 'idle' }
 
-export function stepArming(state: ArmState, event: ArmEvent, now: number): ArmState {
+export function stepArming(state: ArmState, event: ArmEvent, now: number, armMs: number = ARM_MS): ArmState {
   switch (state.phase) {
     case 'idle':
-      return event === 'enter' ? { phase: 'arming', since: now } : state
+      if (event !== 'enter') return state
+      return armMs <= 0 ? { phase: 'armed' } : { phase: 'arming', since: now } // 0 means no waiting
     case 'arming':
       if (event === 'leave') return IDLE
-      return now - state.since >= ARM_MS ? { phase: 'armed' } : state
+      return now - state.since >= armMs ? { phase: 'armed' } : state
     case 'armed':
       return event === 'leave' ? { phase: 'grace', since: now } : state
     case 'grace':
@@ -45,15 +46,15 @@ export const takesClicks = (state: ArmState): boolean => state.phase === 'armed'
 export const isOpen = (state: ArmState): boolean => state.phase !== 'idle'
 
 /** How far the arming border has run, 0 to 1. */
-export function armProgress(state: ArmState, now: number): number {
+export function armProgress(state: ArmState, now: number, armMs: number = ARM_MS): number {
   if (state.phase === 'armed' || state.phase === 'grace') return 1
   if (state.phase === 'idle') return 0
-  return Math.min(1, Math.max(0, (now - state.since) / ARM_MS))
+  return armMs <= 0 ? 1 : Math.min(1, Math.max(0, (now - state.since) / armMs))
 }
 
 /** The time at which the machine next needs a `tick`, or null when it waits for the pointer. */
-export function nextTickAt(state: ArmState): number | null {
-  if (state.phase === 'arming') return state.since + ARM_MS
+export function nextTickAt(state: ArmState, armMs: number = ARM_MS): number | null {
+  if (state.phase === 'arming') return state.since + armMs
   if (state.phase === 'grace') return state.since + GRACE_MS
   return null
 }

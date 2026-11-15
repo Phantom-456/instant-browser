@@ -1,6 +1,17 @@
 # Instant Browser
 
-Instant Browser is a small background app for Mac (Windows later). You press a hotkey, type a search, and a small one-tab browser window opens on top of the app you are working in. You can close it, or send the page to any browser you have installed.
+Instant Browser is a small background app for Mac (a Windows package is in progress). You press a hotkey, type a search, and a small one-tab browser window opens on top of the app you are working in. You can close it, or send the page to any browser you have installed.
+
+## Two packages
+
+The app comes as two separate packages. Each has its own README, build, check and release:
+
+| Package | Folder | State |
+|---|---|---|
+| **macOS** | [packages/mac](packages/mac/README.md) | Tested. Release tags `v...`. Auto-update (when signed). |
+| **Windows** | [packages/windows](packages/windows/README.md) | Early, not validated. Release tags `win-v...`, always pre-releases. |
+
+They share one source code. The shared build settings are in `electron-builder.yml`. `electron-builder.mac.yml` and `electron-builder.win.yml` hold what is different. The GitHub checks are separate too (`check-mac.yml` and `check-windows.yml`).
 
 ## Install
 
@@ -23,10 +34,11 @@ pnpm test
 pnpm smoke
 ```
 
-## Build the Mac app
+## Build the apps
 
 ```bash
-pnpm dist:mac
+pnpm dist:mac   # the Mac app (see packages/mac)
+pnpm dist:win   # the Windows app folder (see packages/windows)
 ```
 
 The app is `dist.noindex/mac-arm64/Instant Browser.app`. It is not signed. The first start may need right-click, Open. It has no Dock icon; look for the icon in the menu bar. It lists itself as a web browser in System Settings, but it never changes your default browser by itself.
@@ -61,13 +73,13 @@ The pin button in the toolbar collapses the window. The whole window shrinks int
 
 - **Hold the pointer on a pin for 2 seconds.** It opens as a capsule with the page name and address, and the gradient border draws itself around it while it arms. Until then, clicks go through to the app behind it. When it is ready, click the pin to open the window again, where it was.
 - **Follow** (right of the pin) makes the pin and its window follow you to every desktop.
-- **Offload** (below): drag the small bubble toward the pin. The page is saved as a picture and released from memory. The pin becomes a border only. Click the pin and the window grows back with the saved picture, then the live page loads and the scroll position comes back. A click on the Offload bubble pauses its countdown, a right-click goes on.
+- **Offload** (below): drag the small bubble toward the pin. The page is saved as a picture and released from memory. The pin goes dormant (a faint disc with a dot at rest, a border only when you point at it). Click the pin and the window grows back with the saved picture, then the live page loads and the scroll position comes back. A click on the Offload bubble pauses its countdown, a right-click goes on.
 - **Remove** (above) takes the pin away and keeps it in an archive.
 - Click the name to rename it (up to 60 characters). Drag the pin to move it.
-- Pins come back after a restart as border-only pins.
+- Pins come back after a restart as released pins.
 - **Automatic Offload** is off until you turn it on in Settings > Pins: by time without use, or when the app uses more memory than a limit you choose (the oldest pins go first; paused pins stay).
 
-**Memory, honestly:** every pin is its own small window and costs about 80 MB, even after Offload. Offload frees the page behind the pin, which is often 90 to 200 MB. The most pins at once is 12 by default (4 to 40 in Settings). The menu bar icon has a Pins list with Open, Offload and Remove for each pin.
+**Memory, honestly:** a pin whose page is alive has a small window of its own that costs about 20 MB (the macOS memory figure, measured). Offload frees the page behind the pin (about 190 MB for a heavy test page). A pin whose page is released has no page process at all while you leave it alone: it is a bare round window. It looks different at rest (a faint disc with a dot) and turns into the full pin when you point at it. The most pins at once is 12 by default (4 to 40 in Settings). The menu bar icon has a Pins list with Open, Offload and Remove for each pin.
 
 ## Pin Manager
 
@@ -96,7 +108,7 @@ The history comes from the history files of Dia, Arc, Google Chrome, Edge, Brave
 
 ## Speed and memory
 
-- **Ready window:** the app keeps one hidden window ready, so the next small window opens at once. It uses about 180 MB of memory while it waits, and it is let go after 10 minutes without use. Turn it off in Settings > General > "Keep a window ready".
+- **Ready window:** the app keeps one hidden window ready, so the next small window opens at once. It uses about 40 MB of memory while it waits, and it is let go after 10 minutes without use. Turn it off in Settings > General > "Keep a window ready".
 - The window shows the address and a loader (in the address bar) the moment you press Enter, before the page answers.
 - The connection to your search engine is opened in advance.
 - Memory use measured on a Mac (Apple silicon), all processes together: about 335 MB at rest, and about 180 to 210 MB for each open small window.

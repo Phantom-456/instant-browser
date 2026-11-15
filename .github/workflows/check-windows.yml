@@ -1,5 +1,7 @@
-name: Check
+name: Windows check
 
+# The Windows package. It is separate from the Mac check on purpose: Windows is not validated yet, and a failure here
+# must not hide the state of the Mac package. Only the type check and the unit tests run (the app tests need a Mac).
 on:
   push:
     branches: [main]
@@ -9,20 +11,6 @@ permissions:
   contents: read
 
 jobs:
-  mac:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # the version comes from "packageManager" in package.json
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm smoke
-
   windows:
     runs-on: windows-latest
     steps:

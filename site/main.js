@@ -68,6 +68,18 @@
       // A release that is not notarized needs one extra step on the Mac. The release notes say so.
       if (/not notarized|unsigned/i.test(release.body || '')) $$('[data-unsigned]').forEach((n) => (n.hidden = false))
 
+      // Windows has its own releases (tags that start with win-v), always pre-releases, so "latest" never has its file.
+      fetch(`https://api.github.com/repos/${owner}/${repo}/releases?per_page=30`, { headers: { Accept: 'application/vnd.github+json' } })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list) => {
+          const win = list.find((r) => /^win-v/.test(r.tag_name) && r.assets.some((a) => assetKinds['win-x64'].test(a.name)))
+          const asset = win?.assets.find((a) => assetKinds['win-x64'].test(a.name))
+          if (!asset) return
+          $$('[data-asset="win-x64"]').forEach((a) => { a.href = asset.browser_download_url; a.querySelector('.size').textContent = formatSize(asset.size) })
+          if (os === 'win') heroButton.href = asset.browser_download_url
+        })
+        .catch(() => {})
+
       // The big button goes straight to the right file.
       if (os === 'mac') {
         const silicon = await guessAppleSilicon()

@@ -1,0 +1,31 @@
+name: Release Windows
+
+# Push a tag like win-v0.3.0 to build the Windows installer and publish it in GitHub Releases as a PRE-RELEASE, so the Mac
+# updater never sees it. Windows is not validated yet (packages/windows/README.md). Not signed yet.
+on:
+  push:
+    tags: ['win-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # the version comes from "packageManager" in package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Build and publish (Windows, not signed yet)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm build
+          pnpm exec electron-builder --config electron-builder.win.yml --win --x64 --publish always
+        shell: bash
