@@ -1,0 +1,12 @@
+# Weekly check for new versions of the tools the app is built on. A new Electron brings Chromium security fixes.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

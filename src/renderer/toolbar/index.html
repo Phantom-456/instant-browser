@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'" />
+    <title>Instant Browser Toolbar</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="group" id="nav">
+      <button class="icon" id="back" title="Back" data-icon="back"></button>
+      <button class="icon" id="forward" title="Forward" data-icon="forward"></button>
+      <button class="icon" id="reload" title="Reload" data-icon="reload"></button>
+    </div>
+
+    <label class="address" id="address">
+      <span class="lock" id="lock" data-icon="lock" hidden></span>
+      <span class="spin" id="spin" data-icon="spinner" hidden></span>
+      <input id="url" type="text" spellcheck="false" autocomplete="off" aria-label="Web address" />
+      <div class="progress" id="progress" hidden></div>
+    </label>
+
+    <div class="group" id="actions">
+      <button class="icon" id="follow" title="Follow me to other desktops" data-icon="follow"></button>
+      <button class="icon" id="pin" title="Keep this window above other apps" data-icon="pin"></button>
+      <button class="icon" id="send" title="Send to main browser. Only the address moves; text you typed in the page is not kept." data-icon="send"></button>
+      <button class="icon" id="pick" title="Send to another browser" data-icon="more"></button>
+      <button class="icon" id="close" title="Close" data-icon="close"></button>
+    </div>
+
+    <div id="error" hidden></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
