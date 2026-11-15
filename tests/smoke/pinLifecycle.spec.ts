@@ -133,10 +133,18 @@ test('the window opens with its pin button exactly on the pin, even after the pi
   const id = (await liveIds())[0]!
   // Move the pin somewhere else (as a drag would), then open it.
   const target = await app.evaluate(({ screen }, pinId) => {
-    const w = (globalThis as unknown as { __pins: { windowOf(id: string): { centrePoint: { x: number; y: number }; moveTo(p: { x: number; y: number }): void } } }).__pins.windowOf(pinId)
+    const m = (globalThis as unknown as { __pins: { pins(): Array<{ id: string; anchor: { x: number; y: number } | null; window: { width: number; height: number } }>; windowOf(id: string): { centrePoint: { x: number; y: number }; moveTo(p: { x: number; y: number }): void } } }).__pins
+    const w = m.windowOf(pinId)
+    const record = m.pins().find((p) => p.id === pinId)!
     const area = screen.getDisplayNearestPoint(w.centrePoint).workArea
-    // Sideways, to the left, but not so far that the window (which must stay on the screen) would be pushed back.
-    const moved = { x: Math.max(area.x + 140, w.centrePoint.x - 160), y: w.centrePoint.y }
+    // A window must stay on the screen, so it is pushed back if the pin goes too far. Choose a new place where the whole
+    // window fits (the pin button is near the right end of the toolbar, so this is a narrow range on a small screen).
+    const anchor = record.anchor ?? { x: record.window.width / 2, y: 24 }
+    const lowest = area.x + anchor.x
+    const highest = area.x + area.width - (record.window.width - anchor.x)
+    const wanted = w.centrePoint.x - 160
+    const x = wanted >= lowest && wanted <= highest ? wanted : Math.min(highest, Math.max(lowest, w.centrePoint.x + 160))
+    const moved = { x: Math.round(Math.min(highest, Math.max(lowest, x))), y: w.centrePoint.y }
     w.moveTo(moved)
     return moved
   }, id)
