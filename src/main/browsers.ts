@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { isTestMode } from './testMode'
 import {
   MAC_BROWSERS,
   exePathFromCommand,
@@ -50,6 +51,9 @@ async function detectWindows(): Promise<BrowserInfo[]> {
 }
 
 export async function detectBrowsers(): Promise<BrowserInfo[]> {
+  if (isTestMode() && process.env.INSTANT_TEST_BROWSERS) {
+    try { return JSON.parse(process.env.INSTANT_TEST_BROWSERS) as BrowserInfo[] } catch { return [] }
+  }
   if (process.platform === 'darwin') return detectMac()
   if (process.platform === 'win32') return detectWindows()
   return []

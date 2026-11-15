@@ -181,6 +181,8 @@ test('light and dark follow the system', async () => {
   await app.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'system' })
 })
 
+const FIXED_BROWSERS = JSON.stringify([{ id: 'company.thebrowser.dia', name: 'Dia' }, { id: 'com.google.Chrome', name: 'Google Chrome' }])
+
 test.describe('link router (Instant Browser is the default browser)', () => {
   const OPTION_COMMAND = String((1 << 19) | (1 << 20))
 
@@ -188,7 +190,7 @@ test.describe('link router (Instant Browser is the default browser)', () => {
     const logs: string[] = []
     const routed = await electron.launch({
       args: ['.', `--user-data-dir=${mkdtempSync(join(tmpdir(), 'ib-router-'))}`, `${base}/`],
-      env: { ...process.env, INSTANT_TEST: '1', INSTANT_TEST_MASK: mask, ...extraEnv } as Record<string, string>
+      env: { ...process.env, INSTANT_TEST: '1', INSTANT_TEST_MASK: mask, INSTANT_TEST_BROWSERS: FIXED_BROWSERS, ...extraEnv } as Record<string, string>
     })
     routed.process().stdout?.on('data', (d) => logs.push(String(d)))
     await routed.firstWindow()
@@ -236,7 +238,7 @@ test.describe('link router (Instant Browser is the default browser)', () => {
     const logs: string[] = []
     const routed = await electron.launch({
       args: ['.', `--user-data-dir=${userData}`, `${base}/`],
-      env: { ...process.env, INSTANT_TEST: '1', INSTANT_TEST_MASK: '0' } as Record<string, string>
+      env: { ...process.env, INSTANT_TEST: '1', INSTANT_TEST_MASK: '0', INSTANT_TEST_BROWSERS: FIXED_BROWSERS } as Record<string, string>
     })
     routed.process().stdout?.on('data', (d) => logs.push(String(d)))
     try {
