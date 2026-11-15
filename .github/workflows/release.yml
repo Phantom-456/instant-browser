@@ -29,6 +29,8 @@ jobs:
       - name: Build, sign, notarize and publish (Mac)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A version with a dash (0.2.0-rc.1) is published as a pre-release, so it never becomes "latest".
+          EP_PRE_RELEASE: ${{ contains(github.ref_name, '-') }}
           CSC_LINK: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -58,6 +60,7 @@ jobs:
       - name: Build and publish (Windows, not signed yet)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EP_PRE_RELEASE: ${{ contains(github.ref_name, '-') }}
         run: |
           pnpm build
           pnpm exec electron-builder --win --x64 --publish always

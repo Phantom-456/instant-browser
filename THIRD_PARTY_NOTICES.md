@@ -7,7 +7,7 @@ Instant Browser is built on the work of other projects. Their licences stay with
 | [Electron](https://www.electronjs.org/) | MIT | The app shell. Its licence file is inside every build. |
 | [Chromium](https://www.chromium.org/) and the projects inside it | BSD-style and others | The web engine. The full list (`LICENSES.chromium.html`) is inside every build. |
 | [electron-updater](https://www.electron.build/) | MIT | Automatic updates. |
-| [Phosphor Icons](https://phosphoricons.com/) | MIT | All icons in the app and on the download page. The app icon and the menu bar icon are drawn from the Phosphor "arrow-square-out" icon. |
+| [Phosphor Icons](https://phosphoricons.com/) | MIT | All icons inside the app and on the download page (buttons, bubbles, settings). The app icon and the menu bar icon are original artwork of this project and are not from Phosphor. |
 | Node.js `node:sqlite` | MIT | Reading browser history files. |
 
 ## Phosphor Icons licence
