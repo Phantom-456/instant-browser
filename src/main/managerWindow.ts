@@ -45,7 +45,7 @@ export class ManagerWindow {
   isOpen(): boolean { return !!this.win && !this.win.isDestroyed() }
 
   open(): void {
-    if (this.win) {
+    if (this.win && !this.win.isDestroyed()) {
       this.win.show()
       this.win.focus()
       return

@@ -1,3 +1,7 @@
+import { protocol } from 'electron'
+import { isLocalInput } from '../shared/localInput'
+
+protocol.registerSchemesAsPrivileged([{ scheme: 'instant-local', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }])
 import { app, dialog, Menu, nativeImage, nativeTheme, Notification, screen, Tray } from 'electron'
 import { join } from 'node:path'
 import { registerHotkey, unregisterHotkey } from './hotkey'
@@ -38,8 +42,11 @@ let ownHistory: OwnHistory | null = null
 let historyIndex: HistoryIndex | null = null
 let pinManager: PinManager | null = null
 let managerWindow: ManagerWindow | null = null
+let searchBarInstance: SearchBar | null = null
+let bubblesInstance: SearchBubbles | null = null
 
 function openFromText(text: string, settings: SettingsFile): void {
+  if (isLocalInput(text)) { void miniWindows?.openLocal(text); return }
   const url = resolveInput(text, settings.get().searchTemplate)
   if (!url) return
   ownHistory?.record(url) // so the bar can suggest it again
@@ -206,12 +213,11 @@ if (!app.requestSingleInstanceLock()) {
     }
     startLinks() // links clicked before the app was ready open now
     ownHistory = new OwnHistory(join(app.getPath('userData'), 'history.json'))
-    let searchBarRef: SearchBar | null = null
     const history = new HistoryIndex(
       () => settings.get(),
       ownHistory,
       join(app.getPath('userData'), 'history-cache.json'),
-      () => searchBarRef?.historyChanged()
+      () => searchBarInstance?.historyChanged()
     )
     historyIndex = history
     setTimeout(() => history.start(), 1200) // old data from the cache at once, then only the files that changed, in another process
@@ -228,8 +234,10 @@ if (!app.requestSingleInstanceLock()) {
         warmNetwork(settings)
       }
     })
-    searchBarRef = searchBar
+    searchBarInstance = searchBar
     const bubbles = new SearchBubbles(searchBar.window, { openSettings: (section) => settingsWindow?.open(section), openManager: () => managerWindow?.open(), closeBar: () => searchBar.hide() })
+    bubblesInstance = bubbles
+    searchBar.setWindowChangeListener((newWin) => bubbles.attachBar(newWin))
     if (process.env.INSTANT_TEST_PINS === '1') { (globalThis as Record<string, unknown>).__bubbles = bubbles; (globalThis as Record<string, unknown>).__searchBar = searchBar } // tests only
     const hotkey = settings.get().hotkey
     const hotkeyOk = registerHotkey(hotkey, () => searchBar.toggle())
@@ -273,6 +281,8 @@ if (!app.requestSingleInstanceLock()) {
       return
     }
     // Stop background work first, so nothing answers into windows that are closing.
+    searchBarInstance?.prepareQuit()
+    bubblesInstance?.prepareQuit()
     historyIndex?.stop()
     updater?.stop()
     miniWindows?.dispose()

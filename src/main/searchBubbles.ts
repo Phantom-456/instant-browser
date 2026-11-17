@@ -15,20 +15,21 @@ const FLYOUT = { width: 200, height: 52 + 8 + SETTINGS_SECTIONS.length * 30 + 16
 export class SearchBubbles {
   private readonly settings: BrowserWindow
   private readonly manager: BrowserWindow
+  private bar: BrowserWindow
   private flyoutOpen = false
+  private quitting = false
 
   constructor(
-    private readonly bar: BrowserWindow,
+    bar: BrowserWindow,
     private readonly handlers: { openSettings: (section: SettingsSection) => void; openManager: () => void; closeBar: () => void }
   ) {
+    this.bar = bar
     this.settings = this.make('settings')
     this.manager = this.make('manager')
-    bar.on('show', () => { this.place(); this.settings.showInactive(); this.manager.showInactive() })
-    bar.on('hide', () => { this.flyoutOpen = false; this.settings.hide(); this.manager.hide() })
-    bar.on('resize', () => this.place())
-    bar.on('closed', () => { this.settings.destroy(); this.manager.destroy() })
+    this.attachBar(bar)
 
     ipcMain.on(BUBBLE_ACTION, (event, action: BubbleAction) => {
+      if (this.settings.isDestroyed() || this.manager.isDestroyed()) return
       if (event.sender !== this.settings.webContents && event.sender !== this.manager.webContents) return
       if (!action || typeof action !== 'object') return
       if (action.kind === 'manager') { handlers.closeBar(); handlers.openManager(); return }
@@ -37,10 +38,38 @@ export class SearchBubbles {
       handlers.openSettings(known)
     })
     ipcMain.on(BUBBLE_HOVER, (event, hover: BubbleHover) => {
+      if (this.settings.isDestroyed() || this.manager.isDestroyed()) return
       if (event.sender !== this.settings.webContents || !hover || hover.kind !== 'settings') return
       this.flyoutOpen = hover.on === true
       this.place()
     })
+  }
+
+  attachBar(bar: BrowserWindow): void {
+    this.bar = bar
+    bar.on('show', () => {
+      if (this.settings.isDestroyed() || this.manager.isDestroyed()) return
+      this.place()
+      this.settings.showInactive()
+      this.manager.showInactive()
+    })
+    bar.on('hide', () => {
+      this.flyoutOpen = false
+      if (!this.settings.isDestroyed()) this.settings.hide()
+      if (!this.manager.isDestroyed()) this.manager.hide()
+    })
+    bar.on('resize', () => {
+      if (!this.bar.isDestroyed()) this.place()
+    })
+    bar.on('closed', () => {
+      if (!this.quitting) return
+      if (!this.settings.isDestroyed()) this.settings.destroy()
+      if (!this.manager.isDestroyed()) this.manager.destroy()
+    })
+  }
+
+  prepareQuit(): void {
+    this.quitting = true
   }
 
   private make(kind: 'settings' | 'manager'): BrowserWindow {
@@ -52,6 +81,12 @@ export class SearchBubbles {
     })
     win.setAlwaysOnTop(true, 'screen-saver')
     win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+    win.on('close', (event) => {
+      if (!this.quitting) {
+        event.preventDefault()
+        win.hide()
+      }
+    })
     const page = rendererPage('bubble')
     if (page.url) void win.loadURL(`${page.url}#${kind}`)
     else if (page.file) void win.loadFile(page.file, { hash: kind })
@@ -79,6 +114,9 @@ export class SearchBubbles {
 
   /** For tests. */
   debug(): { settings: Electron.Rectangle; manager: Electron.Rectangle; visible: boolean } {
-    return { settings: this.settings.getBounds(), manager: this.manager.getBounds(), visible: this.settings.isVisible() && this.manager.isVisible() }
+    const settingsBounds = !this.settings.isDestroyed() ? this.settings.getBounds() : { x: 0, y: 0, width: 0, height: 0 }
+    const managerBounds = !this.manager.isDestroyed() ? this.manager.getBounds() : { x: 0, y: 0, width: 0, height: 0 }
+    const visible = !this.settings.isDestroyed() && !this.manager.isDestroyed() && this.settings.isVisible() && this.manager.isVisible()
+    return { settings: settingsBounds, manager: managerBounds, visible }
   }
 }

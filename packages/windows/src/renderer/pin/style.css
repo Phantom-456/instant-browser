@@ -1,0 +1,125 @@
+/*
+ * The pin. The circle is the size of the toolbar pin button. A capsule opens around it and shares its border.
+ * First hover: the fill fades away (a wireframe, you see through it) and the gradient border draws itself around
+ * the circle and the capsule over 2 seconds. Then the fill comes back and the pin takes clicks.
+ * The window is see-through: only the circle, the capsule and the bubbles are drawn.
+ */
+:root {
+  color-scheme: light dark;
+  --d: 30px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ink: #1d1d1f;
+  --ink-soft: rgba(29, 29, 31, 0.62);
+  --glass: rgba(250, 250, 252, 0.86);
+  --glass-edge: rgba(0, 0, 0, 0.14);
+  --wire: rgba(0, 0, 0, 0.28);
+  --danger: #d4372c;
+  --shadow: 0 4px 14px rgba(20, 24, 40, 0.28);
+}
+/* The main process tells the page whether the system is dark (data-theme), so it is right even if the media query is not. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --ink: #f5f5f7;
+  --ink-soft: rgba(245, 245, 247, 0.66);
+  --glass: rgba(38, 38, 42, 0.88);
+  --glass-edge: rgba(255, 255, 255, 0.18);
+  --wire: rgba(255, 255, 255, 0.4);
+  --danger: #ff6a5f;
+  --shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+:root[data-theme='light'] { color-scheme: light; }
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass: Canvas; }
+}
+
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; -webkit-user-select: none; }
+body { position: relative; font: 500 13px / 1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color: var(--ink); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.defs { position: absolute; }
+button { font: inherit; color: inherit; border: 0; padding: 0; background: none; cursor: default; -webkit-app-region: no-drag; }
+
+/* ---- Borders that draw themselves (SVG, so they follow the circle and the capsule exactly) ---- */
+.circle svg.cring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); pointer-events: none; }
+.edge { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.base, .draw { fill: none; stroke-linecap: round; }
+.base { stroke: var(--wire); stroke-width: 1; opacity: 0; transition: opacity 0.3s var(--ease); }
+.draw { stroke: url(#pg); stroke-width: var(--ring, 2); stroke-dasharray: 1 1; stroke-dashoffset: 0; transition: stroke-width 0.2s var(--ease); }
+.cring .draw { --ring: 5; } /* the circle is drawn in a 100 unit box: 5 units are about 1.5 points */
+.cring .base { stroke-width: 2.5; }
+
+/* ---- The circle ---- */
+.circle { position: absolute; border-radius: 50%; display: grid; place-items: center; filter: drop-shadow(0 2px 6px rgba(20, 24, 40, 0.22)); outline: none; z-index: 2; transition: transform 0.25s var(--spring); }
+.circle:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.circle:active { transform: scale(0.96); }
+.fill { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; transition: opacity 0.35s var(--ease); pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4), inset 0 -6px 10px rgba(0, 0, 0, 0.12);
+  /* The texture: a fine diagonal weave and a soft light from the top, over a see-through colour. */
+  background:
+    radial-gradient(120% 90% at 30% 15%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 55%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.22) 0 1px, rgba(255, 255, 255, 0) 1px 3px),
+    repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.08) 0 1px, rgba(0, 0, 0, 0) 1px 3px); }
+/* The pin's own colour, semi-transparent: you can see what is behind the pin. */
+.fill::before { content: ''; position: absolute; inset: 0; background: var(--gradient); opacity: 0.55; z-index: -1; }
+.fill { isolation: isolate; }
+.icon { position: relative; display: grid; place-items: center; width: 100%; height: 100%; color: var(--ink-on); transition: color 0.35s var(--ease); }
+.icon svg { width: 56%; height: 56%; fill: currentColor; }
+.icon img { width: 62%; height: 62%; object-fit: contain; border-radius: 22%; background: rgba(255, 255, 255, 0.82); padding: 1px; box-sizing: border-box; }
+/* Border only (offloaded): no fill, the ring and the icon take the pin's colour. */
+.circle[data-state='offloaded'] .fill { opacity: 0; }
+.circle[data-state='offloaded'] .icon { color: var(--accent); }
+.circle[data-dragging='true'] { filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.4)); transform: scale(1.12); }
+
+/* ---- The capsule and the bubbles ---- */
+.part { position: absolute; opacity: 0; transform: translate(var(--dx, 0), var(--dy, 0)) scale(0.4); transition: transform 0.3s var(--ease), opacity 0.2s var(--ease), background-color 0.35s var(--ease); pointer-events: none; z-index: 1; }
+body[data-open='true'] .part { opacity: 1; transform: none; pointer-events: auto; }
+body[data-open='true'][data-phase='arming'] .part { pointer-events: none; }
+.pill, .bubble { background: var(--glass); box-shadow: var(--shadow); -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6); }
+.bubble { border: 1px solid var(--glass-edge); }
+.pill { border-radius: 999px; border: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 14px; box-sizing: border-box; }
+.pill[data-side='left'] { padding-right: calc(var(--d) + 18px); }
+.pill[data-side='right'] { padding-left: calc(var(--d) + 18px); }
+.pill:hover { --ring: 3.5; }
+.pill #label, .pill #address { position: relative; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill #label { font-weight: 600; font-size: max(12px, calc(var(--d) * 0.27)); }
+.pill #address { font-size: max(10.5px, calc(var(--d) * 0.21)); color: var(--ink-soft); }
+.bubble { border-radius: 50%; display: grid; place-items: center; outline: none; }
+.bubble svg { width: 55%; height: 55%; fill: currentColor; }
+.bubble:hover { filter: brightness(0.95); }
+.bubble:active { transform: scale(0.94); }
+.bubble:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.bubble[aria-pressed='true'] { color: var(--accent, #2f7cf6); }
+#remove:hover { color: var(--danger); }
+/* The countdown ring around the Offload bubble. */
+#offload { position: absolute; }
+#offload .glyph { display: grid; place-items: center; width: 100%; height: 100%; }
+#offload .glyph svg { width: 55%; height: 55%; fill: currentColor; }
+#offload > .cd { position: absolute; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); transform: rotate(-90deg); pointer-events: none; }
+.cd circle { fill: none; stroke-width: 6; stroke-linecap: round; }
+.cd .track { stroke: var(--glass-edge); }
+.cd .left { stroke: var(--accent, #2f7cf6); transition: stroke-dasharray 0.4s var(--ease); }
+#offload[data-countdown='paused'] .left, #offload[data-countdown='held'] .left { stroke: var(--ink-soft); }
+
+/* Editing the name: the text field sits where the name was, a little spring on the capsule. */
+.rename { position: relative; font: inherit; font-weight: 600; font-size: max(12px, calc(var(--d) * 0.27)); color: var(--ink); background: transparent; border: 0; outline: none; padding: 0; width: 100%; min-width: 0; text-overflow: clip; }
+.pill.editing { animation: spring 0.35s var(--spring); }
+@keyframes spring { 0% { transform: scale(1); } 50% { transform: scale(1.03); } 100% { transform: scale(1); } }
+.pill { cursor: text; }
+
+/* ---- The two seconds of arming: a wireframe you can see through, and a border that draws itself ---- */
+body[data-phase='arming'] .fill { opacity: 0; }
+body[data-phase='arming'] .icon { color: var(--ink); }
+body[data-phase='arming'] .pill,
+body[data-phase='arming'] .bubble { background: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+body[data-phase='arming'] .bubble { border-color: var(--wire); }
+body[data-phase='arming'] .circle { filter: none; }
+body[data-phase='arming'] .base { opacity: 1; }
+body[data-phase='arming'] .draw { animation: draw var(--arm, 2000ms) linear forwards; }
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+/* Back to idle (the pointer left): the border is complete again, with no animation. */
+
+@media (prefers-reduced-motion: reduce) {
+  .part { transform: none; }
+  body[data-phase='arming'] .draw { animation: fadein var(--arm, 2000ms) linear forwards; stroke-dashoffset: 0; }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+}

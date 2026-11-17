@@ -19,7 +19,7 @@ test('the download buttons find the files by the names electron-builder gives th
   const script = read('site/main.js')
   // artifactName: Instant-Browser-${version}-mac-${arch}.${ext}  and  ...-win-${arch}.${ext}  (each package has its own file)
   expect(read('electron-builder.mac.yml')).toMatch(/Instant-Browser-\$\{version\}-mac-\$\{arch\}\.\$\{ext\}/)
-  expect(read('electron-builder.win.yml')).toMatch(/Instant-Browser-\$\{version\}-win-\$\{arch\}\.\$\{ext\}/)
+  expect(read('packages/windows/electron-builder.yml')).toMatch(/Instant-Browser-\$\{version\}-win-\$\{arch\}\.\$\{ext\}/)
   expect(script).toContain('mac-arm64\\.dmg')
   expect(script).toContain('mac-x64\\.dmg')
   expect(script).toContain('win-x64\\.exe')
@@ -43,10 +43,10 @@ test('the Mac and Windows packages have their own checks and releases', () => {
   expect(mac).not.toContain('windows-latest') // a Windows problem must not touch the Mac release
   expect(win).toContain("tags: ['win-v*']")
   expect(win).toContain('windows-latest')
-  expect(win).toContain('--config electron-builder.win.yml')
+  expect(win).toContain('working-directory: packages/windows')
   expect(win).not.toContain('macos-latest')
   // Windows releases are pre-releases with their own tag prefix, so the Mac updater and "latest" never see them.
-  const winConfig = read('electron-builder.win.yml')
+  const winConfig = read('packages/windows/electron-builder.yml')
   expect(winConfig).toContain('releaseType: prerelease')
   expect(winConfig).toContain('tagNamePrefix: win-v')
   // The two checks are separate files too.
@@ -56,6 +56,15 @@ test('the Mac and Windows packages have their own checks and releases', () => {
   // Apple secrets are read from GitHub secrets, never written in the file.
   expect(mac).toContain('secrets.APPLE_APP_SPECIFIC_PASSWORD')
   expect(mac).not.toMatch(/APPLE_APP_SPECIFIC_PASSWORD:\s*['"]?[a-z]{4}-[a-z]{4}-/)
+})
+
+test('the Windows package is a complete codebase of its own', () => {
+  for (const file of ['package.json', 'pnpm-lock.yaml', 'tsconfig.json', 'electron.vite.config.ts', 'electron-builder.yml', 'src/main/index.ts', 'tests/unit/settings.test.ts']) {
+    expect(existsSync(`packages/windows/${file}`), file).toBe(true)
+  }
+  // It shares no code with the Mac side: nothing in it imports from outside its own folder.
+  const index = read('packages/windows/src/main/index.ts')
+  expect(index).not.toMatch(/from '(\.\.\/){4,}/)
 })
 
 test('each package has its own README, and the root README points to both', () => {

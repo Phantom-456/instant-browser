@@ -2,6 +2,8 @@
 
 The macOS package of Instant Browser. It is the one that is tested every day and the one the auto-updater serves.
 
+**The Mac codebase is the root of this repository** (`src`, `tests`, `package.json`, `electron-builder.mac.yml` ...). This folder only holds this README. The Windows codebase is separate, in [packages/windows](../windows/README.md), and shares no code with the Mac one.
+
 ## What you get
 
 A menu bar app with no Dock icon. Press the hotkey, type a search, and a small browser window opens. Collapse windows into pins, offload them to save memory, and manage them in the Pin Manager. The full list of features is in the [main README](../../README.md).
@@ -11,6 +13,8 @@ A menu bar app with no Dock icon. Press the hotkey, type a search, and a small b
 macOS 12 or newer, Apple silicon or Intel.
 
 ## Build it
+
+Run these at the root of the repository:
 
 ```bash
 pnpm install

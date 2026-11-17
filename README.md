@@ -4,18 +4,26 @@ Instant Browser is a small background app for Mac (a Windows package is in progr
 
 ## Two packages
 
-The app comes as two separate packages. Each has its own README, build, check and release:
+The app comes as two separate codebases in one repository. Each has its own README, build, check and release:
 
 | Package | Folder | State |
 |---|---|---|
-| **macOS** | [packages/mac](packages/mac/README.md) | Tested. Release tags `v...`. Auto-update (when signed). |
+| **macOS** | the root of this repository ([notes](packages/mac/README.md)) | Tested. Release tags `v...`. Auto-update (when signed). |
 | **Windows** | [packages/windows](packages/windows/README.md) | Early, not validated. Release tags `win-v...`, always pre-releases. |
 
-They share one source code. The shared build settings are in `electron-builder.yml`. `electron-builder.mac.yml` and `electron-builder.win.yml` hold what is different. The GitHub checks are separate too (`check-mac.yml` and `check-windows.yml`).
+They share **no code**. The Windows codebase is a full copy in `packages/windows` with its own sources, tests, lock file and build settings, so work on Windows never touches the Mac app. A fix that both need is copied by hand. The GitHub checks are separate too (`check-mac.yml` and `check-windows.yml`), and each starts only when its own code changes.
 
 ## Install
 
 Download it from the project page: **https://phantom-456.github.io/instant-browser/** (Mac and Windows). The files are in GitHub Releases. The app updates itself.
+
+## Local files (0.2.1)
+
+Paste an absolute HTML or Markdown path into the search bar or a window's address field. `~/` paths, quoted paths, and `file://` URLs are supported. Each open asks permission to read the file's containing folder until that window closes. Cancel grants nothing; reopening asks again. Local paths are excluded from web searches, online suggestions, and web history.
+
+HTML can run sandboxed scripts and use supporting files within the approved folder. Markdown is rendered with unsafe embedded HTML removed and scripts disabled. Files outside the folder, including symlinks pointing outside, are blocked. Open another file's path explicitly for a separate permission prompt. Pages using application-server routes still need their server for complete styling and navigation.
+
+See [0.2.1 patch notes](docs/patch-0.2.1.md).
 
 ## Run it from the code
 
@@ -38,7 +46,7 @@ pnpm smoke
 
 ```bash
 pnpm dist:mac   # the Mac app (see packages/mac)
-pnpm dist:win   # the Windows app folder (see packages/windows)
+cd packages/windows && pnpm install && pnpm dist:win   # the Windows app folder (see packages/windows)
 ```
 
 The app is `dist.noindex/mac-arm64/Instant Browser.app`. It is not signed. The first start may need right-click, Open. It has no Dock icon; look for the icon in the menu bar. It lists itself as a web browser in System Settings, but it never changes your default browser by itself.

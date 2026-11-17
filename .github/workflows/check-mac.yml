@@ -1,10 +1,13 @@
 name: Mac check
 
-# The macOS package. It has its own check, so a Windows problem never turns this one red.
+# The macOS package (the code at the root of the repository). It has its own check, so a Windows problem never turns this one red,
+# and a change that only touches packages/windows does not start it.
 on:
   push:
     branches: [main]
+    paths-ignore: ['packages/windows/**', '.github/workflows/check-windows.yml', '.github/workflows/release-windows.yml']
   pull_request:
+    paths-ignore: ['packages/windows/**', '.github/workflows/check-windows.yml', '.github/workflows/release-windows.yml']
 
 permissions:
   contents: read

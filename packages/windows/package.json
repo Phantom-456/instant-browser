@@ -1,0 +1,49 @@
+{
+  "name": "instant-browser-windows",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Instant Browser for Windows. An independent codebase: it shares no code with the Mac package.",
+  "main": "out/main/index.js",
+  "packageManager": "pnpm@10.34.9",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "smoke": "pnpm build && playwright test",
+    "dist:win": "pnpm build && electron-builder --win dir",
+    "dist:win:release": "pnpm build && electron-builder --win --x64 --publish never"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "^2.1.1",
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^26.6.6",
+    "@types/sanitize-html": "^2.16.2",
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  },
+  "homepage": "https://phantom-456.github.io/instant-browser/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Phantom-456/instant-browser.git"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Instant Browser"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11",
+    "marked": "^18.2.0",
+    "sanitize-html": "^2.18.2"
+  }
+}

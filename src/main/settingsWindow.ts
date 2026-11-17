@@ -71,7 +71,7 @@ export class SettingsWindow {
   }
 
   open(section?: SettingsSection): void {
-    if (this.win) {
+    if (this.win && !this.win.isDestroyed()) {
       this.win.show()
       this.win.focus()
       if (section) this.win.webContents.send(SETTINGS_SECTION, section)

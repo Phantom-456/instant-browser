@@ -1,3 +1,5 @@
+import { isLocalInput } from './localInput'
+
 /** How many suggestions the search bar shows. */
 export const MAX_SUGGESTIONS = 7
 
@@ -7,7 +9,7 @@ export const MAX_SUGGESTIONS = 7
  */
 export function suggestEndpoint(searchTemplate: string, text: string): string | null {
   const query = text.trim()
-  if (!query) return null
+  if (!query || isLocalInput(query)) return null
   let host: string
   try {
     host = new URL(searchTemplate.replace('%s', 'x')).hostname.toLowerCase()

@@ -15,7 +15,12 @@ test.afterAll(async () => { await app?.close() })
 type Rect = { x: number; y: number; width: number; height: number }
 const showBar = () => app.evaluate(() => (globalThis as unknown as { __searchBar: { show(): void } }).__searchBar.show())
 const barBounds = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/search/'))!.getBounds())
-const barVisible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/search/'))!.isVisible())
+const barVisible = () => app.evaluate(({ BrowserWindow }) => {
+  const bar = BrowserWindow.getAllWindows().find((w) => {
+    try { return !w.isDestroyed() && !w.webContents.isDestroyed() && w.webContents.getURL().includes('/search/') } catch { return false }
+  })
+  return !!bar && !bar.isDestroyed() && bar.isVisible()
+})
 const debug = () => app.evaluate(() => (globalThis as unknown as { __bubbles: { debug(): { settings: Rect; manager: Rect; visible: boolean } } }).__bubbles.debug())
 const send = (page: string, events: object[]) =>
   app.evaluate(({ webContents }, a) => {
@@ -105,5 +110,48 @@ test('the hotkey closes an open bar; what was typed stays when it opens again; t
   await barJs("document.getElementById('glass').dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))")
   await expect.poll(() => barJs("document.getElementById('query').value")).toBe('')
   expect(await barJs("document.getElementById('glass').classList.contains('clear')")).toBe(false)
+  await toggleBar() // leave it closed
+})
+
+test('window close or Cmd+W hides rather than destroys the search bar; destroyed window self-heals on toggle', async () => {
+  await showBar()
+  await expect.poll(barVisible).toBe(true)
+
+  // Explicit window.close() should be intercepted and merely hide the bar
+  await app.evaluate(({ BrowserWindow }) => {
+    const bar = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/search/'))
+    bar?.close()
+  })
+  await expect.poll(barVisible).toBe(false)
+
+  // Verify window was not destroyed
+  const stillAlive = await app.evaluate(({ BrowserWindow }) => {
+    const bar = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/search/'))
+    return !!bar && !bar.isDestroyed()
+  })
+  expect(stillAlive).toBe(true)
+
+  // Toggling opens it again smoothly
+  await toggleBar()
+  await expect.poll(barVisible).toBe(true)
+
+  // Cmd+W in the search input hides the bar
+  await send('/search/', [{ type: 'keyDown', keyCode: 'W', modifiers: ['meta'] }, { type: 'char', keyCode: 'w', modifiers: ['meta'] }])
+  await expect.poll(barVisible).toBe(false)
+
+  // If the window is forcefully destroyed, toggle() must self-heal and not throw
+  await app.evaluate(({ BrowserWindow }) => {
+    const bar = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/search/'))
+    bar?.destroy()
+  })
+  const isDestroyed = await app.evaluate(({ BrowserWindow }) => {
+    const bar = BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes('/search/'))
+    return !bar || bar.isDestroyed()
+  })
+  expect(isDestroyed).toBe(true)
+
+  // Toggle must not throw "TypeError: Object has been destroyed" and must recreate & show the bar
+  await toggleBar()
+  await expect.poll(barVisible).toBe(true)
   await toggleBar() // leave it closed
 })

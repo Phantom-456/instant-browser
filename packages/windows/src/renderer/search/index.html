@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'" />
+    <title>Instant Browser Search</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="card">
+      <label id="field">
+        <button id="glass" type="button" tabindex="-1" aria-label="Search"></button>
+        <input id="query" type="text" placeholder="Search or type a web address" autocomplete="off" spellcheck="false" />
+      </label>
+      <div id="results" hidden></div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

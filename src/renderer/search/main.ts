@@ -213,6 +213,7 @@ input.addEventListener('keydown', (event) => {
   const mod = event.metaKey || event.ctrlKey
   if (mod && event.key === ',') { event.preventDefault(); api.openSettings('General'); return }
   if (mod && event.shiftKey && event.key.toLowerCase() === 'p') { event.preventDefault(); api.openManager(); return }
+  if (mod && event.key.toLowerCase() === 'w') { event.preventDefault(); api.cancel(); return }
   if (event.key === 'ArrowDown' && flat.length) {
     event.preventDefault()
     select(selected + 1 >= flat.length ? -1 : selected + 1)

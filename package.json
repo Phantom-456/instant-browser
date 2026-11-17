@@ -1,6 +1,6 @@
 {
   "name": "instant-browser",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Hotkey search bar that opens small floating one-tab browser windows.",
   "main": "out/main/index.js",
@@ -12,9 +12,7 @@
     "typecheck": "tsc --noEmit",
     "smoke": "pnpm build && playwright test",
     "dist:mac": "pnpm build && electron-builder --config electron-builder.mac.yml --mac dir",
-    "dist:win": "pnpm build && electron-builder --config electron-builder.win.yml --win dir",
-    "dist:mac:release": "pnpm build && electron-builder --config electron-builder.mac.yml --mac --arm64 --x64 --publish never",
-    "dist:win:release": "pnpm build && electron-builder --config electron-builder.win.yml --win --x64 --publish never"
+    "dist:mac:release": "pnpm build && electron-builder --config electron-builder.mac.yml --mac --arm64 --x64 --publish never"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -26,6 +24,7 @@
     "@phosphor-icons/core": "^2.1.1",
     "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.6",
+    "@types/sanitize-html": "^2.16.2",
     "electron": "^45.3.2",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
@@ -43,6 +42,8 @@
     "name": "Instant Browser"
   },
   "dependencies": {
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "marked": "^18.2.0",
+    "sanitize-html": "^2.18.2"
   }
 }

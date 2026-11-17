@@ -1,0 +1,50 @@
+# The Windows package. This is its own codebase, so this one file holds everything (nothing is extended from the Mac side).
+# It is released on its own: tags that start with win-v (for example win-v0.1.0), always as a pre-release, so the Mac
+# updater never sees them. Windows is not validated yet (see README.md).
+appId: io.github.phantom-456.instantbrowser
+productName: Instant Browser
+copyright: Instant Browser
+directories:
+  # The name ends with .noindex so Spotlight does not list the app copies in it.
+  output: dist.noindex
+  buildResources: build
+files:
+  - out/**
+  - resources/**
+  - package.json
+# The licence files travel inside every build.
+extraResources:
+  - { from: LICENSE, to: LICENSE }
+  - { from: NOTICE, to: NOTICE }
+  - { from: THIRD_PARTY_NOTICES.md, to: THIRD_PARTY_NOTICES.md }
+protocols:
+  - name: Web address
+    schemes: [http, https]
+
+# Where updates come from. electron-updater reads the GitHub Releases of this repository.
+publish:
+  - provider: github
+    owner: Phantom-456
+    repo: instant-browser
+    releaseType: prerelease
+    tagNamePrefix: win-v
+
+win:
+  icon: build/icon.png
+  target:
+    - { target: nsis, arch: [x64] }
+  artifactName: Instant-Browser-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  resetAdHocDarwinSignature: true

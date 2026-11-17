@@ -1,0 +1,46 @@
+/*
+ * Shared look for all our own pages. A web approximation of Apple's Liquid Glass:
+ * the real blur comes from the macOS window (vibrancy); these styles add the soft edges, light and motion.
+ * One accent colour. One shape rule: controls are pills, cards are 16px.
+ */
+:root {
+  color-scheme: light dark;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --accent: #2f7cf6;
+  --accent-soft: rgba(47, 124, 246, 0.16);
+  --ink: #1d1d1f;
+  --ink-soft: rgba(29, 29, 31, 0.62);
+  --ink-faint: rgba(29, 29, 31, 0.4);
+  --hover: rgba(0, 0, 0, 0.07);
+  --press: rgba(0, 0, 0, 0.12);
+  --field: rgba(255, 255, 255, 0.72);
+  --edge: rgba(0, 0, 0, 0.1);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+  --danger: #d4372c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: #5b9bff;
+    --accent-soft: rgba(91, 155, 255, 0.22);
+    --ink: #f5f5f7;
+    --ink-soft: rgba(245, 245, 247, 0.66);
+    --ink-faint: rgba(245, 245, 247, 0.4);
+    --hover: rgba(255, 255, 255, 0.1);
+    --press: rgba(255, 255, 255, 0.17);
+    --field: rgba(255, 255, 255, 0.1);
+    --edge: rgba(255, 255, 255, 0.14);
+    --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+    --danger: #ff6a5f;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --field: Canvas; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+svg { display: block; }
+[hidden] { display: none !important; }

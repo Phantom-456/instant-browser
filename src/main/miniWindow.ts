@@ -1,4 +1,7 @@
-import { BaseWindow, WebContentsView, dialog, ipcMain, nativeImage, nativeTheme, screen, shell, systemPreferences, type Input, type WebContents } from 'electron'
+import { randomUUID } from 'node:crypto'
+import { LocalFileGrant, localTarget } from './localFiles'
+import { isLocalInput } from '../shared/localInput'
+import { BaseWindow, WebContentsView, dialog, session, type Session, ipcMain, nativeImage, nativeTheme, screen, shell, systemPreferences, type Input, type WebContents } from 'electron'
 import { PAGE_SWIPE, PAGE_SWIPE_CAN, PREVIEW_ACTION, PREVIEW_STATE, TOOLBAR_ACTION, TOOLBAR_STATE, type PreviewAction, type PreviewState, type ToolbarAction, type ToolbarState } from '../shared/ipc'
 import { httpFallback } from '../shared/httpsFirst'
 import { placeNear } from '../shared/placement'
@@ -103,6 +106,7 @@ export interface OpenFromPin {
 export type MiniHandle = MiniWindow
 
 interface MiniWindow {
+  localGrant?: LocalFileGrant
   /** A number for the manager list. */
   id: number
   /** The address of the page's icon, when it has one. */
@@ -262,8 +266,32 @@ export class MiniWindowManager {
     }
   }
 
+  /** Explicit user input is the only entry point that can ask for local access. */
+  async openLocal(raw: string): Promise<void> {
+    try {
+      const target = await localTarget(raw)
+      const { response } = await dialog.showMessageBox({
+        type: 'question', title: 'Open local file', message: 'Allow this page to read files in this folder until closed?',
+        detail: `Page: ${target.path}\n\nFolder: ${target.root}\n\nHTML may run scripts and use the network. Markdown scripts are disabled. Access is not remembered.`,
+        buttons: ['Cancel', 'Allow until closed'], defaultId: 0, cancelId: 0, noLink: true
+      })
+      if (response !== 1 || this.disposed) return
+      const id = randomUUID()
+      const grant = new LocalFileGrant(target.root, id)
+      const isolated = session.fromPartition(`local-${id}`, { cache: false })
+      isolated.setPermissionRequestHandler((_wc, _permission, callback) => callback(false))
+      isolated.setPermissionCheckHandler(() => false)
+      isolated.on('will-download', (event) => event.preventDefault())
+      isolated.protocol.handle('instant-local', (request) => grant.respond(request))
+      const mini = this.create(false, { grant, session: isolated })
+      this.present(mini, grant.url(target.path))
+    } catch (error) {
+      dialog.showErrorBox('Could not open local file', String(error))
+    }
+  }
+
   /** Build a window, with its toolbar and web page, hidden. Nothing is shown to the user yet. */
-  private create(blankPage: boolean): MiniWindow {
+  private create(blankPage: boolean, local?: { grant: LocalFileGrant; session: Session }): MiniWindow {
     const settings = this.deps.settings.get()
     const win = new BaseWindow({
       width: settings.windowSize.width,
@@ -290,7 +318,7 @@ export class MiniWindowManager {
       webPreferences: { preload: preloadPath('toolbar'), sandbox: true, contextIsolation: true, nodeIntegration: false }
     })
     const page = new WebContentsView({
-      webPreferences: { session: getWebSession(), sandbox: true, contextIsolation: true, nodeIntegration: false }
+      webPreferences: { session: local?.session ?? getWebSession(), sandbox: true, contextIsolation: true, nodeIntegration: false }
     })
     page.setBorderRadius(12) // the page sits in the glass frame with soft corners
     page.setBackgroundColor(pageBackground()) // no white flash in dark mode while the page loads
@@ -311,7 +339,7 @@ export class MiniWindowManager {
       mini.preview?.setBounds(pageBounds)
     }
     const mini: MiniWindow = {
-      win, toolbar, page, layout, id: ++nextMiniId, faviconUrl: null, collapsed: false, preview: null,
+      localGrant: local?.grant, win, toolbar, page, layout, id: ++nextMiniId, faviconUrl: null, collapsed: false, preview: null,
       pinned: settings.alwaysOnTop, following: false, error: null,
       pendingUrl: '', starting: false, ignoreResizeUntil: 0
     }
@@ -329,12 +357,18 @@ export class MiniWindowManager {
     win.on('closed', () => {
       this.byToolbarId.delete(toolbarId)
       if (this.spare === mini) this.spare = null
+      local?.grant.revoke()
+      if (local) {
+        local.session.protocol.unhandle('instant-local')
+        void local.session.clearStorageData().catch(() => {})
+        void local.session.clearCache().catch(() => {})
+      }
       page.webContents.close()
       toolbar.webContents.close()
     })
 
     this.applyPin(mini)
-    this.guardPage(mini)
+    this.guardPage(mini, local?.grant)
 
     const wc = page.webContents
     const push = () => this.pushState(mini)
@@ -414,20 +448,30 @@ export class MiniWindowManager {
   }
 
   /** Rules for the untrusted page: web URLs only, popups become new mini windows. */
-  private guardPage(mini: MiniWindow): void {
+  private guardPage(mini: MiniWindow, grant?: LocalFileGrant): void {
     const wc = mini.page.webContents
     wc.setWindowOpenHandler(({ url }) => {
       if (isAllowedUrl(url)) this.open(url)
-      else void shell.openExternal(url) // for example mailto: or msteams:
+      else if (!/^(file|instant-local|javascript|data|chrome|devtools):/i.test(url)) void shell.openExternal(url)
       return { action: 'deny' }
     })
     const block = (event: { preventDefault: () => void }, url: string) => {
-      if (isAllowedUrl(url)) return
+      if (grant?.allows(url)) return
+      if (isAllowedUrl(url)) {
+        if (!grant) return
+        event.preventDefault()
+        this.open(url)
+        return
+      }
       event.preventDefault()
-      if (!/^(file|javascript|data|chrome|devtools):/i.test(url)) void shell.openExternal(url)
+      if (!/^(file|instant-local|javascript|data|chrome|devtools):/i.test(url)) void shell.openExternal(url)
     }
     wc.on('will-navigate', (event, url) => block(event, url))
     wc.on('will-redirect', (event, url) => block(event, url))
+    if (grant) wc.on('will-frame-navigate', (event) => {
+      // Remote documents cannot share a session carrying local-folder access.
+      if (!event.isMainFrame && !grant.allows(event.url) && event.url !== 'about:blank') event.preventDefault()
+    })
   }
 
   private applyPin(mini: MiniWindow): void {
@@ -690,7 +734,7 @@ export class MiniWindowManager {
     if (mini.win.isDestroyed()) return
     const wc = mini.page.webContents
     const state: ToolbarState = {
-      url: currentUrl(mini),
+      url: mini.localGrant?.displayPath(currentUrl(mini)) ?? currentUrl(mini),
       title: wc.getTitle(),
       canGoBack: wc.navigationHistory.canGoBack(),
       canGoForward: wc.navigationHistory.canGoForward(),
@@ -717,7 +761,11 @@ export class MiniWindowManager {
         break
       case 'navigate': {
         const url = resolveInput(action.text, this.deps.settings.get().searchTemplate)
-        if (url) void wc.loadURL(url)
+        if (isLocalInput(action.text)) { void this.openLocal(action.text); break }
+        if (url) {
+          if (wc.getURL().startsWith('instant-local:')) this.open(url)
+          else void wc.loadURL(url)
+        }
         break
       }
       case 'collapse':
