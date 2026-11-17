@@ -31,6 +31,8 @@ function setIcon(icon: string | null): void {
   if (icon) {
     const img = document.createElement('img')
     img.alt = ''
+    img.draggable = false // a picture can be dragged out of a page; this one must not, or the pin cannot be dragged
+    img.addEventListener('dragstart', (e) => e.preventDefault())
     img.src = icon
     img.onerror = () => { shownIcon = undefined; setIcon(null) } // a broken picture falls back to the pin icon
     iconEl.replaceChildren(img)
@@ -201,6 +203,7 @@ document.addEventListener('mouseleave', () => {
 
 // ---- The circle: a click restores, a drag moves ----
 const DRAG_START = 4
+circle.addEventListener('dragstart', (event) => event.preventDefault()) // never a picture drag from the pin
 circle.addEventListener('pointerdown', (event) => {
   if (event.button !== 0) return
   const startX = event.screenX

@@ -4,8 +4,9 @@ import { armedLayout, chooseSide, contains, freeSpot, onCircle, restingBounds, S
 import type { Rect } from '../../src/shared/pins/model'
 
 const screen: Rect = { x: 0, y: 25, width: 1440, height: 800 }
+// (one pixel of slack: the layout works in whole pixels)
 const inside = (inner: Rect, outer: Rect) =>
-  inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height
+  inner.x >= outer.x - 1 && inner.y >= outer.y - 1 && inner.x + inner.width <= outer.x + outer.width + 1 && inner.y + inner.height <= outer.y + outer.height + 1
 
 describe('pin layout', () => {
   it('wraps the circle in a capsule that grows to the left; Follow right, Offload below, Remove above', () => {
@@ -26,12 +27,13 @@ describe('pin layout', () => {
     expect(l.circleCentre).toEqual({ x: 700, y: 400 })
   })
 
-  it('mirrors at the left edge', () => {
+  it('mirrors at the left edge: the capsule grows to the right and Follow moves to the free end', () => {
     const c = { x: 40, y: 400 }
     expect(chooseSide(c, 48, screen)).toBe('right')
     const l = armedLayout(c, 48, screen)
     expect(l.descriptionSide).toBe('right')
-    expect(l.follow.x + l.follow.width).toBeLessThan(l.circle.x)
+    expect(l.follow.x).toBeGreaterThanOrEqual(l.description.x + l.description.width) // past the free end of the capsule
+    expect(Math.abs(l.circleCentre.x - c.x) + Math.abs(l.circleCentre.y - c.y)).toBeLessThanOrEqual(1) // the circle did not move
   })
 
   it('stays inside the work area at every edge and corner, for several sizes', () => {
@@ -39,7 +41,8 @@ describe('pin layout', () => {
       for (const x of [0, 30, 720, 1410, 1440]) {
         for (const y of [25, 60, 400, 790, 825]) {
           const l = armedLayout({ x, y }, d, screen)
-          expect(inside(l.bounds, screen)).toBe(true)
+          const seen = [l.circle, l.description, l.follow, l.offload, l.remove].map((r) => ({ x: r.x + l.bounds.x, y: r.y + l.bounds.y, width: r.width, height: r.height }))
+          for (const r of seen) expect(inside(r, screen)).toBe(true) // what you see is on the screen (the shadow margin may reach past the edge)
           for (const part of [l.circle, l.description, l.follow, l.offload, l.remove]) {
             expect(inside({ x: part.x + l.bounds.x, y: part.y + l.bounds.y, width: part.width, height: part.height }, l.bounds)).toBe(true)
           }
@@ -161,4 +164,33 @@ describe('free spot for a new pin', () => {
     expect(p.x).toBeGreaterThanOrEqual(screen.x)
     expect(p.y).toBeLessThanOrEqual(screen.y + screen.height)
   })
+})
+
+describe('pins at the corners and edges of the screen', () => {
+  const hit = (a: Rect, b: Rect) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
+  const abs = (l: ReturnType<typeof armedLayout>, r: Rect): Rect => ({ x: r.x + l.bounds.x, y: r.y + l.bounds.y, width: r.width, height: r.height })
+
+  for (const d of [19, 28, 37, 48]) {
+    const m = d / 2 + 7 // the nearest a pin can be dragged to an edge
+    const corners = [
+      { name: 'top left', x: screen.x + m, y: screen.y + m }, { name: 'top right', x: screen.x + screen.width - m, y: screen.y + m },
+      { name: 'bottom left', x: screen.x + m, y: screen.y + screen.height - m }, { name: 'bottom right', x: screen.x + screen.width - m, y: screen.y + screen.height - m },
+      { name: 'top middle', x: 700, y: screen.y + m }, { name: 'bottom middle', x: 700, y: screen.y + screen.height - m }
+    ]
+    for (const c of corners) {
+      it(`${c.name}, size ${d}: the circle stays under the pointer, nothing overlaps, everything is on the screen`, () => {
+        const l = armedLayout({ x: c.x, y: c.y }, d, screen)
+        expect(Math.abs(l.circleCentre.x - c.x)).toBeLessThanOrEqual(1) // the pin did not move away from the pointer
+        expect(Math.abs(l.circleCentre.y - c.y)).toBeLessThanOrEqual(1)
+        const all = { circle: abs(l, l.circle), description: abs(l, l.description), follow: abs(l, l.follow), offload: abs(l, l.offload), remove: abs(l, l.remove) }
+        for (const [name, r] of Object.entries(all)) expect(inside(r, screen), `${name} is on the screen`).toBe(true)
+        // Remove must never sit where the circle is: clicking the pin must not click Remove.
+        for (const bubble of [all.follow, all.offload, all.remove]) {
+          expect(hit(bubble, all.circle)).toBe(false)
+          expect(hit(bubble, all.description)).toBe(false)
+        }
+        expect(hit(all.follow, all.offload) || hit(all.follow, all.remove) || hit(all.offload, all.remove)).toBe(false)
+      })
+    }
+  }
 })
