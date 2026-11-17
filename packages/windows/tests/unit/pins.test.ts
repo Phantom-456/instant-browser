@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { PinStore } from '../../src/main/pins/pinStore'
-import { contrast, generateGradient, hueDistance, hslToRgb, luminance, stopIsVisible } from '../../src/shared/pins/gradient'
+import { ARC_STOPS, contrast, generateGradient, hslToRgb, luminance, stopIsVisible } from '../../src/shared/pins/gradient'
 import {
   PIN_STORE_VERSION, archivePin, clampPoint, clampRect, createPin, labelOf, normalizeLabel, parsePinFile, windowForPin,
   type GradientSpec, type PinRecord
@@ -20,40 +20,34 @@ const make = (id: string, over: Partial<PinRecord> = {}): PinRecord => ({
 })
 
 describe('gradient', () => {
-  it('gives the same gradient for the same seed', () => {
-    expect(generateGradient([], 42)).toEqual(generateGradient([], 42))
+  it('every pin has the same blue to pink gradient, whatever its seed', () => {
+    const a = generateGradient([], 1)
+    const b = generateGradient([a], 99999)
+    expect(a.stops).toEqual(b.stops)
+    expect(a.angle).toBe(b.angle)
+    expect(ARC_STOPS.map((s) => s.h)).toEqual([224, 268, 334]) // blue, violet, pink
   })
 
-  it('keeps every colour visible on a light and on a dark desktop', () => {
-    for (let i = 0; i < 300; i++) {
-      const g = generateGradient([], i * 7919)
-      expect(g.stops.length).toBeGreaterThanOrEqual(2)
-      for (const s of g.stops) {
-        expect(stopIsVisible(s)).toBe(true)
-        const y = luminance(hslToRgb(s.h, s.s, s.l))
-        expect(contrast(y, 1)).toBeGreaterThanOrEqual(3)
-      }
+  it('goes from blue to pink', () => {
+    const [first, , last] = ARC_STOPS
+    expect(first!.h).toBeGreaterThan(200)
+    expect(first!.h).toBeLessThan(250) // blue
+    expect(last!.h).toBeGreaterThan(310) // pink
+  })
+
+  it('every colour stays visible on a light and on a dark desktop (at least 3 to 1)', () => {
+    for (const s of ARC_STOPS) {
+      expect(stopIsVisible(s)).toBe(true)
+      const y = luminance(hslToRgb(s.h, s.s, s.l))
+      expect(contrast(y, 1)).toBeGreaterThanOrEqual(3)
     }
   })
 
-  it('keeps the first 12 pins well apart in hue', () => {
-    const list: GradientSpec[] = []
-    for (let i = 0; i < 12; i++) list.push(generateGradient(list, 1000 + i))
-    let closest = 360
-    for (let a = 0; a < list.length; a++) {
-      for (let b = a + 1; b < list.length; b++) closest = Math.min(closest, hueDistance(list[a]!.stops[0]!.h, list[b]!.stops[0]!.h))
-    }
-    expect(closest).toBeGreaterThanOrEqual(10)
-  })
-
-  it('still makes a valid gradient for 200 pins', () => {
-    const list: GradientSpec[] = []
-    for (let i = 0; i < 200; i++) {
-      const g = generateGradient(list, i + 5)
-      expect(g.stops.every(stopIsVisible)).toBe(true)
-      list.push(g)
-    }
-    expect(new Set(list.map((g) => g.seed)).size).toBeGreaterThan(190)
+  it('a pin saved with an older random colour comes back with the blue to pink one', () => {
+    const old = { ...make('pin-00000009'), gradient: { seed: 7, stops: [{ h: 10, s: 50, l: 50 }, { h: 20, s: 50, l: 50 }], angle: 12 } }
+    const parsed = parsePinFile({ version: PIN_STORE_VERSION, pins: [old] }).pins[0]!
+    expect(parsed.gradient.stops).toEqual(ARC_STOPS)
+    expect(parsed.gradient.seed).toBe(7) // the identity of the record stays
   })
 })
 

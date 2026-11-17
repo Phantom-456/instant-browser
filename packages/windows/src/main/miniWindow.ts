@@ -664,11 +664,15 @@ export class MiniWindowManager {
     const clear = () => {
       if (slowTimer) clearTimeout(slowTimer)
       slowTimer = null
+      if (successTimer) clearTimeout(successTimer)
+      successTimer = null
       wc.removeListener('did-finish-load', onLoaded)
       wc.removeListener('did-fail-load', onFailed)
       ipcMain.removeListener(PREVIEW_ACTION, onAction)
     }
     const start = () => {
+      failed = false
+      if (successTimer) { clearTimeout(successTimer); successTimer = null }
       state.status = 'updating'
       send(state)
       if (slowTimer) clearTimeout(slowTimer)
@@ -676,8 +680,18 @@ export class MiniWindowManager {
       if (wc.isLoading()) wc.stop()
       void wc.loadURL(opts.url).catch(() => {})
     }
+    // A page that cannot load still ends with "finished loading" (Chromium shows its own error page). That is not success: a
+    // failure always wins, so the pin is not deleted and Retry and Cancel show.
+    let failed = false
+    let successTimer: ReturnType<typeof setTimeout> | null = null
     const onLoaded = () => {
-      if (finished) return
+      if (finished || failed) return
+      if (successTimer) clearTimeout(successTimer)
+      successTimer = setTimeout(complete, 150) // a failure that comes just after the finish cancels this
+    }
+    const complete = () => {
+      successTimer = null
+      if (finished || failed) return
       finished = true
       clear()
       if (opts.scroll) void wc.executeJavaScript(`window.scrollTo(${Math.round(opts.scroll.x)}, ${Math.round(opts.scroll.y)})`).catch(() => {})
@@ -688,6 +702,8 @@ export class MiniWindowManager {
     }
     const onFailed = (_e: unknown, code: number, description: string, _url: string, isMainFrame: boolean) => {
       if (!isMainFrame || code === -3 || finished) return
+      failed = true
+      if (successTimer) { clearTimeout(successTimer); successTimer = null }
       if (slowTimer) clearTimeout(slowTimer)
       state.status = 'failed'
       state.message = `The page did not load (${description}).`
