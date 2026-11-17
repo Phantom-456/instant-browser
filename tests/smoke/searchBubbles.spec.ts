@@ -89,6 +89,8 @@ test('the hotkey closes an open bar; what was typed stays when it opens again; t
   await expect.poll(barVisible).toBe(true)
 
   await expect.poll(() => barJs("document.getElementById('query') !== null")).toBe(true) // the page is there
+  // What was typed stays when the bar opens again, so start from an empty field (an earlier test typed a key into it).
+  await barJs("(() => { const i = document.getElementById('query'); i.value = ''; i.dispatchEvent(new Event('input')) })()")
   await new Promise((r) => setTimeout(r, 400)) // and the list had time to fill
   // No quick settings in the list any more.
   expect(String(await barJs("Array.from(document.querySelectorAll('h2')).map((h) => h.textContent).join('|')"))).not.toMatch(/settings/i)

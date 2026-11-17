@@ -40,13 +40,15 @@ export class PinShell {
     const s = this.size()
     const stop = this.record.gradient.stops[0]!
     const [r, g, b] = hslToRgb(stop.h, stop.s, stop.l)
+    const last = this.record.gradient.stops[this.record.gradient.stops.length - 1]!
+    const [r2, g2, b2] = hslToRgb(last.h, last.s, last.l) // the blue end for the disc, the pink end for the dot
     this.disc.setBounds({ x: PAD, y: PAD, width: d, height: d })
     this.disc.setBorderRadius(Math.round(d / 2))
     this.disc.setBackgroundColor(`rgba(${r}, ${g}, ${b}, 0.34)`)
     const dot = Math.max(6, Math.round(d * 0.36))
     this.dot.setBounds({ x: Math.round((s - dot) / 2), y: Math.round((s - dot) / 2), width: dot, height: dot })
     this.dot.setBorderRadius(Math.round(dot / 2))
-    this.dot.setBackgroundColor(`rgba(${r}, ${g}, ${b}, 0.92)`)
+    this.dot.setBackgroundColor(`rgba(${r2}, ${g2}, ${b2}, 0.95)`)
   }
 
   get centrePoint(): Point { return this.centre }

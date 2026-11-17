@@ -1,3 +1,5 @@
+import { arcGradient } from './gradient'
+
 /**
  * What a pin is, as it is saved on disk. Pure code: no Electron, no files.
  * Cookies and site storage are never part of a pin. They stay in the normal browser session.
@@ -89,7 +91,7 @@ export function parsePin(raw: unknown): PinRecord | null {
     archived: r.archived === true,
     archivedAt: finite(r.archivedAt) ? r.archivedAt : null,
     following: r.following === true,
-    gradient: r.gradient,
+    gradient: arcGradient(r.gradient.seed), // one look for every pin: pins saved with an older random colour get the blue to pink one
     window: r.window,
     anchor: isPoint(r.anchor) ? r.anchor : null,
     pin: r.pin,

@@ -71,50 +71,28 @@ export function readableText(backgroundLuminance: number): 'black' | 'white' {
   return contrast(backgroundLuminance, 0) >= contrast(backgroundLuminance, 1) ? 'black' : 'white'
 }
 
-// ---- Making a gradient ----
-
-const ATTEMPTS = 24
-/** A new pin tries to be at least this far (in hue) from every existing pin. It shrinks as pins grow. */
-function wantedDistance(existingCount: number): number {
-  return Math.max(10, Math.min(60, 360 / (existingCount + 2)))
-}
-
-function build(seed: number): GradientSpec {
-  const rng = mulberry32(seed)
-  const baseHue = rng() * 360
-  const saturation = 68 + rng() * 22 // 68 to 90
-  const stopCount = rng() < 0.5 ? 2 : 3
-  const spread = 22 + rng() * 26 // neighbouring stops are 22 to 48 degrees apart: harmonious
-  const direction = rng() < 0.5 ? 1 : -1
-  const stops: GradientStop[] = []
-  for (let i = 0; i < stopCount; i++) {
-    const hue = (baseHue + direction * spread * i + 360) % 360
-    // Find a lightness that is visible on both light and dark desktops (mid-tones). Yellows and greens need a darker value.
-    let lightness = 50
-    for (const candidate of [50, 46, 54, 42, 58, 38, 62, 34]) {
-      if (stopIsVisible({ h: hue, s: saturation, l: candidate })) { lightness = candidate; break }
-    }
-    stops.push({ h: Math.round(hue), s: Math.round(saturation), l: lightness })
-  }
-  return { seed, stops, angle: Math.round(rng() * 360) }
-}
+// ---- The gradient ----
 
 /**
- * Make a gradient for a new pin. Tries a bounded number of seeds, keeps the first one that is far enough from the
- * existing pins, and otherwise the best one found. `seed` lets a test (or a retry) ask for a repeatable result.
+ * Every pin uses the same blue to pink gradient, like the one in Arc's own look: a bright blue, a violet and a pink. (An earlier
+ * version made a different random gradient for each pin; the user chose one look for all.) All three colours pass the
+ * contrast rule: they stay visible on a light and on a dark desktop.
  */
-export function generateGradient(existing: GradientSpec[], seed = (Math.random() * 4294967296) >>> 0): GradientSpec {
-  const wanted = wantedDistance(existing.length)
-  const usedHues = existing.map((g) => g.stops[0]?.h ?? 0)
-  let best: { spec: GradientSpec; distance: number } | null = null
-  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    const spec = build((seed + attempt * 2654435761) >>> 0)
-    const distance = usedHues.length === 0 ? 180 : Math.min(...usedHues.map((h) => hueDistance(h, spec.stops[0]!.h)))
-    if (!spec.stops.every(stopIsVisible)) continue
-    if (distance >= wanted) return spec
-    if (!best || distance > best.distance) best = { spec, distance }
-  }
-  return best?.spec ?? build(seed)
+export const ARC_STOPS: GradientStop[] = [
+  { h: 224, s: 90, l: 60 }, // blue
+  { h: 268, s: 80, l: 64 }, // violet
+  { h: 334, s: 88, l: 64 } // pink
+]
+export const ARC_ANGLE = 135
+
+/** The gradient of a pin. `seed` is kept (it identifies the pin's gradient record) but does not change the colours. */
+export function arcGradient(seed = 0): GradientSpec {
+  return { seed: seed >>> 0, stops: ARC_STOPS.map((s) => ({ ...s })), angle: ARC_ANGLE }
+}
+
+/** Kept for the callers that ask for a new pin's gradient: it is always the blue to pink one. */
+export function generateGradient(_existing: GradientSpec[] = [], seed = 0): GradientSpec {
+  return arcGradient(seed)
 }
 
 export function stopCss(stop: GradientStop): string {
