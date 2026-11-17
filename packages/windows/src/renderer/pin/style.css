@@ -64,7 +64,9 @@ button { font: inherit; color: inherit; border: 0; padding: 0; background: none;
 .fill { isolation: isolate; }
 .icon { position: relative; display: grid; place-items: center; width: 100%; height: 100%; color: var(--ink-on); transition: color 0.35s var(--ease); }
 .icon svg { width: 56%; height: 56%; fill: currentColor; }
-.icon img { width: 62%; height: 62%; object-fit: contain; border-radius: 22%; background: rgba(255, 255, 255, 0.82); padding: 1px; box-sizing: border-box; }
+/* The website's icon sits straight on the pin. It is only a picture: no plate behind it, and it never takes the mouse or starts a
+   picture drag, so the pin can be moved by pressing on it. */
+.icon img { width: 62%; height: 62%; object-fit: contain; background: none; pointer-events: none; -webkit-user-drag: none; user-select: none; }
 /* Border only (offloaded): no fill, the ring and the icon take the pin's colour. */
 .circle[data-state='offloaded'] .fill { opacity: 0; }
 .circle[data-state='offloaded'] .icon { color: var(--accent); }

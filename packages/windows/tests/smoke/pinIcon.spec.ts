@@ -49,6 +49,33 @@ test('a page with its own icon: the pin keeps a small copy and shows it instead 
   const pin = await collapsedPin('/', 'With icon')
   expect(pin.icon).toMatch(/^data:image\/png;base64,/)
   await expect.poll(() => pinPageHas('#icon img')).toBe(true)
+  // The picture is not a drag source, takes no mouse, and has no plate behind it (it once turned into a solid white box).
+  const style = await app!.evaluate(async ({ webContents }) => {
+    const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('/pin/'))
+    return (await wc?.executeJavaScript("(() => { const i = document.querySelector('#icon img'); const s = getComputedStyle(i); return { draggable: i.draggable, events: s.pointerEvents, background: s.backgroundColor, drag: s.webkitUserDrag } })()")) as { draggable: boolean; events: string; background: string; drag: string }
+  })
+  expect(style.draggable).toBe(false)
+  expect(style.events).toBe('none')
+  expect(style.background).toMatch(/rgba\(0, 0, 0, 0\)|transparent/)
+})
+
+test('the website icon never starts a picture drag, so the pin can be moved by pressing on it', async () => {
+  await collapsedPin('/', 'With icon')
+  await expect.poll(() => pinPageHas('#icon img')).toBe(true)
+  const result = await app!.evaluate(async ({ webContents }) => {
+    const wc = webContents.getAllWebContents().find((w) => w.getURL().includes('/pin/'))
+    return (await wc?.executeJavaScript(`(() => {
+      const img = document.querySelector('#icon img')
+      // The browser starts a picture drag with a dragstart event on the picture. It must be refused, and the picture must not even be a target.
+      const event = new DragEvent('dragstart', { bubbles: true, cancelable: true })
+      img.dispatchEvent(event)
+      const circle = document.getElementById('circle')
+      const onCircle = new DragEvent('dragstart', { bubbles: true, cancelable: true })
+      circle.dispatchEvent(onCircle)
+      return { imgDraggable: img.draggable, refusedOnImg: event.defaultPrevented, refusedOnCircle: onCircle.defaultPrevented }
+    })()`)) as { imgDraggable: boolean; refusedOnImg: boolean; refusedOnCircle: boolean }
+  })
+  expect(result).toEqual({ imgDraggable: false, refusedOnImg: true, refusedOnCircle: true })
 })
 
 test('a page without an icon: the pin keeps the pin icon', async () => {

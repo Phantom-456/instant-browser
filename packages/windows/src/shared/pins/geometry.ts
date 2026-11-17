@@ -65,25 +65,53 @@ export function armedLayout(centre: Point, d: number, area: Rect, side: Side = c
   const circle = box(0, 0, d, d)
   const edge = d / 2 + PILL_INSET // the capsule's edge on the circle's side
   const description = box(-dir * (edge - pillW / 2), 0, pillW, pillH)
-  const follow = box(-dir * (edge + gap + b / 2), 0, b, b)
-  const offload = box(0, pillH / 2 + gap + b / 2, b, b)
-  const remove = box(0, -(pillH / 2 + gap + b / 2), b, b)
+
+  // The room around the pin, from the circle's centre to the edge of the usable screen. Only the parts you see have to fit:
+  // the see-through margin for the shadow may reach past the edge of the screen.
+  const room = {
+    left: centre.x - area.x, right: area.x + area.width - centre.x,
+    top: centre.y - area.y, bottom: area.y + area.height - centre.y
+  }
+  const fits = (r: Rect) => r.x >= -room.left && r.x + r.width <= room.right && r.y >= -room.top && r.y + r.height <= room.bottom
+  const apart = (r: Rect, others: Rect[]) =>
+    others.every((o) => r.x >= o.x + o.width + 2 || o.x >= r.x + r.width + 2 || r.y >= o.y + o.height + 2 || o.y >= r.y + r.height + 2)
+
+  // Places for a bubble. Normally Follow is on the far side of the circle, Offload below and Remove above. Near an edge or
+  // a corner there is no room for that, so a bubble takes a free place in the row at either end of the capsule or the other
+  // side. The circle never moves: the pointer stays on it.
+  const far = (i: number) => box(-dir * (edge + gap + b / 2 + i * (b + gap)), 0, b, b)
+  const end = (i: number) => box(dir * (pillW - edge + gap + b / 2 + i * (b + gap)), 0, b, b)
+  const above = box(0, -(pillH / 2 + gap + b / 2), b, b)
+  const below = box(0, pillH / 2 + gap + b / 2, b, b)
+  const row = [far(0), end(0), far(1), end(1), far(2), end(2)]
+  const placed: Rect[] = [circle, description]
+  const place = (wanted: Rect[]): Rect => {
+    const choice = wanted.find((r) => fits(r) && apart(r, placed)) ?? wanted.find((r) => apart(r, placed)) ?? wanted[0]!
+    placed.push(choice)
+    return choice
+  }
+  const follow = place([far(0), end(0), ...row, above, below])
+  const offload = place([below, ...row, above])
+  const remove = place([above, ...row, below])
 
   const parts = [circle, description, follow, offload, remove]
-  const left = Math.min(...parts.map((r) => r.x)) - SHADOW_MARGIN
-  const top = Math.min(...parts.map((r) => r.y)) - SHADOW_MARGIN
-  const right = Math.max(...parts.map((r) => r.x + r.width)) + SHADOW_MARGIN
-  const bottom = Math.max(...parts.map((r) => r.y + r.height)) + SHADOW_MARGIN
-  const width = right - left
-  const height = bottom - top
+  // What you see (without the margin for the shadow) must be on the screen.
+  const seenLeft = Math.min(...parts.map((r) => r.x))
+  const seenTop = Math.min(...parts.map((r) => r.y))
+  const seenWidth = Math.max(...parts.map((r) => r.x + r.width)) - seenLeft
+  const seenHeight = Math.max(...parts.map((r) => r.y + r.height)) - seenTop
+  const left = seenLeft - SHADOW_MARGIN
+  const top = seenTop - SHADOW_MARGIN
+  const width = seenWidth + SHADOW_MARGIN * 2
+  const height = seenHeight + SHADOW_MARGIN * 2
 
-  // Place the window so the circle stays where it is, then shift the whole group inside the work area if needed.
-  let x = centre.x + left
-  let y = centre.y + top
-  x = Math.min(Math.max(x, area.x), area.x + Math.max(0, area.width - width))
-  y = Math.min(Math.max(y, area.y), area.y + Math.max(0, area.height - height))
-  x = Math.round(x)
-  y = Math.round(y)
+  // The window keeps the circle where it is. Only if the group still does not fit (a very small screen) it is moved.
+  let seenX = centre.x + seenLeft
+  let seenY = centre.y + seenTop
+  seenX = Math.min(Math.max(seenX, area.x), area.x + Math.max(0, area.width - seenWidth))
+  seenY = Math.min(Math.max(seenY, area.y), area.y + Math.max(0, area.height - seenHeight))
+  const x = Math.round(seenX) - SHADOW_MARGIN
+  const y = Math.round(seenY) - SHADOW_MARGIN
   const circleCentre = { x: Math.round(x - left), y: Math.round(y - top) }
   const rel = (r: Rect): Rect => ({ x: r.x - left, y: r.y - top, width: r.width, height: r.height })
   return {
