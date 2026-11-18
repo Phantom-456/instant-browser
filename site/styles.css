@@ -112,7 +112,9 @@ section { padding: clamp(56px, 9vw, 112px) var(--gutter); max-width: 1240px; mar
 .pills li { padding: 6px 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); font-size: 14px; font-weight: 500; }
 .cell-links { background: var(--accent-soft); box-shadow: none; }
 .cell-light { grid-column: span 2; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 20px; align-items: center; }
-.cell-pins, .cell-merge, .cell-sync { padding-top: 30px; }
+.cell-pins { grid-column: span 2; display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); gap: 20px; align-items: center; }
+.cell-pins img { width: 100%; border-radius: 16px; }
+.cell-sync { grid-column: span 3; }
 .cell-pins { background: linear-gradient(160deg, var(--surface), color-mix(in srgb, var(--accent) 7%, var(--surface))); }
 .cell-merge { background: var(--surface); }
 .cell-sync { background: var(--arc); background-size: 200% 100%; animation: arcflow 14s linear infinite; color: #fff; box-shadow: none; }
@@ -164,7 +166,7 @@ section { padding: clamp(56px, 9vw, 112px) var(--gutter); max-width: 1240px; mar
   .hero { grid-template-columns: 1fr; }
   .hero-shot img { margin: 0 auto; max-width: 440px; }
   .bento, .downloads, .two { grid-template-columns: 1fr; }
-  .cell-search, .cell-light { grid-column: auto; grid-template-columns: 1fr; }
+  .cell-search, .cell-light, .cell-pins, .cell-sync { grid-column: auto; grid-template-columns: 1fr; }
   .cell-light .cell-text, .cell-light picture { order: initial; }
   .two > div + div { border-left: 0; padding-left: 0; margin-left: 0; border-top: 1px solid var(--line); padding-top: 28px; }
 }
