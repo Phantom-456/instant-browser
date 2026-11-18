@@ -522,7 +522,7 @@ function sectionRows(section: Section): HTMLElement[] {
         row('Sync my bookmarks', 'One list of bookmarks for your whole Google account: the same page is one bookmark on every computer, and removing it removes it everywhere.', toggle('syncBookmarks')),
         row('Sync my history', 'The addresses you opened from this app (not the history of your other browsers), with how often and when. Cleared history stays cleared on every computer.', toggle('syncHistory')),
         row('Sites left out of history sync', 'The history of these sites stays on this computer only. Write the site names with commas, for example bank.example.com, mail.example.com. A name also covers its subdomains.', textBox(view.settings.syncHistoryExcluded.join(', '), (text) => void save({ syncHistoryExcluded: text.split(/[\s,]+/).filter(Boolean) }))),
-        row('Share what I have open', 'Your other computers can see the pages you have open here (windows and pins), and open them there with "Open here" in the Pin Manager. The list updates when you open or close a window, and every few minutes.', toggle('syncOpenPages')),
+        row('Share what I have open', 'Your other computers can see the pages you have open here (windows and pins), and open them there with "Open here" in Manage. The list updates when you open or close a window, and every few minutes.', toggle('syncOpenPages')),
         row('This computer\'s name', 'Shown on your other computers next to the pages open here. Up to 40 characters.', textBox(view.settings.deviceName, (deviceName) => void save({ deviceName }))),
         head('What is synced and what is not'),
         row('What is synced', 'Your pins (address, title, your name for it, archived or not), a short list of settings, and what the switches above allow. The colours of pins are the same on every computer. Everything is locked with your passphrase before it leaves this computer.', node('span', {})),
@@ -539,10 +539,10 @@ function sectionRows(section: Section): HTMLElement[] {
     case 'Your browsers': {
       return [
         head('Bookmarks from your browsers', 'One list of the bookmarks in every browser on this computer. The same address is one entry, in the folders the browsers already use. It is read only: Talaria never changes a browser.'),
-        row('Show bookmarks from my other browsers', 'Reads the bookmark files of your browsers. They show in the Pin Manager and in the search bar. Cookies and passwords are never read.', toggle('otherBookmarks')),
+        row('Show bookmarks from my other browsers', 'Reads the bookmark files of your browsers. They show in Manage and in the search bar. Cookies and passwords are never read.', toggle('otherBookmarks')),
         ...(s.otherBookmarks ? view.bookmarkSources.map((name) => row(`Bookmarks from ${name}`, '', sourceSwitch(name, 'bookmarksOff'))) : []),
         row('Keep a copy', 'Saves the merged list in Talaria\'s own folder, so it is there at once when Talaria starts, even when a browser is closed or its file is locked.', toggle('keepCopy')),
-        head('History from your browsers', 'The pages you opened in the other browsers, mixed into the search bar and the Pin Manager. It stays in memory and is read only.'),
+        head('History from your browsers', 'The pages you opened in the other browsers, mixed into the search bar and Manage. It stays in memory and is read only.'),
         row('Show history in the search bar', 'Reads the history files of your browsers on this computer to suggest your recent searches and pages. History stays in memory. Nothing is copied or sent anywhere. Cookies and passwords are never read.', toggle('showHistory')),
         ...(s.showHistory ? view.historySources.map((name) => row(`History from ${name}`, '', sourceSwitch(name))) : []),
         head('Open tabs', view.tabsAvailable ? 'The tabs that are open now in your browsers, with the time Talaria first saw each one.' : 'Listing open tabs works on a Mac only.'),

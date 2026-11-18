@@ -53,7 +53,7 @@ The app is `dist.noindex/mac-arm64/Instant Browser.app`. It is not signed. The f
 
 ## Look
 
-The windows use macOS glass (vibrancy), soft round shapes and small hover animations. Light and dark follow the system. The address bar is a label until you hover or click it. Icons are from Phosphor (MIT licence). The app icon is made from `build/icon.png`.
+The windows use macOS glass (vibrancy), soft round shapes and calm animations. Light and dark follow the system: dark is clear glass, and light is frosted lavender paper with solid white cards. One pink-violet-blue accent is used everywhere and it stops moving when the Mac is set to reduce motion. The address bar is a label until you hover or click it. Icons are from Phosphor (MIT licence). The app icon is made from `build/icon.png`.
 
 ## Use it
 
@@ -89,12 +89,19 @@ The pin button in the toolbar collapses the window. The whole window shrinks int
 
 **Memory, honestly:** a pin whose page is alive has a small window of its own that costs about 20 MB (the macOS memory figure, measured). Offload frees the page behind the pin (about 190 MB for a heavy test page). A pin whose page is released has no page process at all while you leave it alone: it is a bare round window. It looks different at rest (a faint disc with a dot) and turns into the full pin when you point at it. The most pins at once is 12 by default (4 to 40 in Settings). The menu bar icon has a Pins list with Open, Offload and Remove for each pin.
 
-## Pin Manager
+## Manage (the Pin Manager)
 
-Open it from the menu bar icon (Pin Manager), from the round bubble to the right of the search bar, or with Cmd+Shift+P while the search bar is open. It lists:
+Open it from the menu bar icon (Manage), from the round bubble to the right of the search bar, or with Cmd+Shift+P while the search bar is open. It is one window with a search box and a tab bar:
 
-- **Pins**: name, address, colours, and whether the page is in memory or released. Open, Rename (double-click the name), Offload, Follow, Details and Remove.
+- **Search** filters every list at once (Cmd+F or `/` jumps to it).
+- **Tabs** (All, Pins, Windows, Bookmarks, History, Browsers, Archive, and Other computers when sync shows some) with a count on each.
+- **Keyboard:** Up and Down walk through the rows, Right and Left open and close a bookmark folder, Enter presses the main button.
+- Each row has one main button. The other buttons slide in when you point at the row or focus it.
+- **Pins**: name, address, colours, and whether the page is in memory or released. Open, Rename (double-click the name), Offload, Follow, Keep here, Details and Remove.
 - **Open windows**: Show or Close. An open window is not a pin.
+- **Bookmarks**: yours. Open, Edit, Keep here (this computer only) and Remove. Remove can be undone for a few seconds.
+- **History**: from Talaria and your other browsers, with the browser and the kind of site. You can delete what was opened in Talaria (with Undo).
+- **Browsers**: the bookmarks of your other browsers (see Your browsers below) and, if you turned it on, their open tabs.
 - **Archive**: pins you removed. **Put back** shows the pin again (released). **Delete for good** asks first and cannot be undone.
 
 macOS does not tell apps the names or numbers of your desktops, so pins are listed in one place. A pin whose desktop is gone is still listed and opens from here.
@@ -114,6 +121,16 @@ Settings, Sync, **Connect Google Drive**. Your normal browser opens Google's pag
 - Builds made without a Google login key (for example from the public code) show "This build cannot connect to Google Drive." To make your own, create a Google Cloud desktop client and put `MAIN_VITE_GOOGLE_CLIENT_ID` and `MAIN_VITE_GOOGLE_CLIENT_SECRET` in a file named `.env.local` (never commit it).
 - The privacy policy is on the download page (privacy.html).
 
+## Your browsers (Settings, Your browsers)
+
+Every option has its own switch. Talaria only reads: it never changes a browser, and it never reads cookies or passwords.
+
+- **Bookmarks from your other browsers.** It reads the bookmark files of Chrome, Edge, Brave, Arc, Dia, Vivaldi and Firefox. One address is one entry, whichever browsers have it, in the folders they already use. They show in Manage (Browsers tab) and in the search bar. Safari is not read (its file needs Full Disk Access).
+- **Keep a copy.** The merged list is saved in Talaria's own folder (`browsers/bookmarks-merged.json`), so it is there at once at start, and it stays when a browser is closed or its file is locked.
+- **Watch the browsers' files.** When a browser changes its bookmarks or history, Talaria reads the file again a few seconds later. Turn it off to update only when the search bar opens and every few minutes.
+- **History from your browsers**, with a switch for each browser.
+- **List open tabs** (Mac only, **off by default**). It asks macOS for permission to control each browser, once for each. Only the address and title of each tab are read, and a closed browser is never started. Browsers do not say when a tab was made, so the list shows "first seen", the time Talaria first noticed it. It is off by default because an update can make macOS ask for the permission again.
+
 ## Search bar history
 
 Press the hotkey with nothing typed and the bar shows bubbles: quick Settings links and your recent searches, then recently visited pages. When you type, it shows matching history first, then your search engine's suggestions, and Settings bubbles that match.
@@ -124,7 +141,7 @@ The history comes from the history files of Dia, Arc, Google Chrome, Edge, Brave
 - The bar shows old data first, then updates itself when newer data is ready. A file is read again only when it changed (its size or time is different), and the bar looks at that at most every 5 minutes.
 - To show old data at once after a restart, a small **saved copy** is kept in the app's data folder (`history-cache.json`). It holds the addresses, titles and times of up to about 1,500 recent rows per browser file. It is readable only by your user, stays on this computer and is never sent anywhere. Turning history off, or "Clear what Instant Browser remembers" in Settings, deletes it.
 - Only history is read. **Cookies, passwords and saved cards are never read.**
-- You can turn history off, or leave out single browsers, in Settings > Privacy and security. Safari is not read.
+- You can turn history off, or leave out single browsers, in Settings > Your browsers. Safari is not read.
 - If macOS blocks a browser's folder (Chrome may), that browser is skipped.
 
 ## Speed and memory
@@ -164,6 +181,12 @@ The values are saved in a file you can also edit by hand when the app is closed:
 | `updateNotice` | Tell me when the browser engine is out of date |
 | `askDownloadLocation` | Ask where to save each download |
 | `downloadFolder` | Folder for downloads when not asking |
+| `otherBookmarks` | Show the bookmarks of your other browsers |
+| `bookmarksOff` | Browsers whose bookmarks are not read |
+| `keepCopy` | Keep a copy of the merged bookmarks in Talaria's folder |
+| `watchBrowsers` | Read a browser's files again when it changes them |
+| `liveTabs` | List the open tabs of your browsers (Mac; off by default) |
+| `liveTabsOff` | Browsers whose tabs are not listed |
 
 ## Security compared to Google Chrome
 

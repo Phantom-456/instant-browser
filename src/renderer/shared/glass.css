@@ -35,8 +35,22 @@
     --danger: #ff6a5f;
   }
 }
+/* Light mode: plain glass over a bright window looks grey and washed out. Here it is frosted paper instead: a soft
+   lavender-blue tint over the blur, solid white cards, hairline edges and a violet-tinted lift. Dark mode is unchanged. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --paper: linear-gradient(165deg, rgba(251, 248, 255, 0.9), rgba(241, 246, 255, 0.88));
+    --field: rgba(255, 255, 255, 0.96);
+    --edge: rgba(40, 40, 90, 0.1);
+    --bar: rgba(251, 249, 255, 0.88);
+    --lift: 0 1px 2px rgba(40, 30, 110, 0.06), 0 8px 22px rgba(70, 50, 150, 0.08);
+    --ink-soft: rgba(29, 29, 45, 0.68);
+    --ink-faint: rgba(29, 29, 45, 0.46);
+  }
+  html:root { background: var(--paper); }
+}
 @media (prefers-reduced-transparency: reduce) {
-  :root { --field: Canvas; }
+  :root { --field: Canvas; --paper: Canvas; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

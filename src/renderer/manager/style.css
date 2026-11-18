@@ -2,7 +2,9 @@
 
 html, body { overflow: auto; background: transparent; height: 100%; }
 body { padding: 0 24px 32px; }
-header { position: sticky; top: 0; z-index: 2; padding: 46px 0 10px; -webkit-app-region: drag; background: linear-gradient(var(--surface, transparent) 70%, transparent); }
+header { position: sticky; top: 0; z-index: 2; margin: 0 -24px; padding: 44px 24px 10px; -webkit-app-region: drag; background: var(--bar, rgba(246, 246, 248, 0.72)); -webkit-backdrop-filter: blur(22px) saturate(1.4); backdrop-filter: blur(22px) saturate(1.4); box-shadow: 0 1px 0 var(--edge); }
+@media (prefers-color-scheme: dark) { header { --bar: rgba(30, 30, 34, 0.7); } }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 h1 { margin: 0; font-size: 22px; font-weight: 650; }
 #summary { margin: 4px 0 0; color: var(--ink-soft); font-size: 12.5px; line-height: 1.45; max-width: 62ch; }
 h2 { margin: 26px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); }
@@ -42,3 +44,58 @@ input.rename { width: 100%; box-sizing: border-box; height: 26px; padding: 0 10p
 .row.folder:hover { background: var(--hover, rgba(127, 127, 127, 0.1)); }
 .swatch.folder { background: var(--arc); border-radius: 6px; }
 .indent { margin-left: 18px; }
+
+/* ---- search, tabs ---- */
+#search { -webkit-app-region: no-drag; flex: 0 1 260px; min-width: 150px; height: 32px; padding: 0 14px; border: 1px solid var(--edge); border-radius: 999px; background: var(--field); color: var(--ink); font: 500 13px/1 inherit; outline: 2px solid transparent; outline-offset: -1px; transition: outline-color 160ms var(--ease), box-shadow 160ms var(--ease); }
+#search:focus { outline-color: var(--accent); box-shadow: 0 2px 12px var(--accent-soft); }
+#tabs { -webkit-app-region: no-drag; display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+#tabs::-webkit-scrollbar { display: none; }
+.tab { flex: none; height: 26px; padding: 0 11px; font-size: 12px; white-space: nowrap; transition: background 180ms var(--ease), color 180ms var(--ease), transform 120ms var(--ease); }
+.tab:active { transform: scale(0.96); }
+.tab .n { margin-left: 6px; font-variant-numeric: tabular-nums; opacity: 0.6; }
+.tab.active { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+.tab.active .n { opacity: 1; }
+h2 { position: relative; }
+
+/* ---- rows: the main button is always there; the others slide in over the address when the row is hovered or focused ---- */
+button.go { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 600; }
+button.go:hover { background: var(--accent); color: #fff; }
+.row { position: relative; transition: background 160ms var(--ease), box-shadow 160ms var(--ease); }
+.row:hover { box-shadow: 0 2px 14px rgba(0, 0, 0, 0.06); }
+.actions { position: relative; }
+.actions .more { position: absolute; right: 100%; top: 50%; margin-right: 6px; display: flex; gap: 6px; padding: 3px; border-radius: 999px; background: var(--bar, var(--field)); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 0 0 1px var(--edge); opacity: 0; transform: translate(6px, -50%); pointer-events: none; transition: opacity 100ms var(--ease), transform 100ms var(--ease); white-space: nowrap; }
+.row:hover .actions .more, .row:focus-within .actions .more { opacity: 1; transform: translate(0, -50%); pointer-events: auto; transition-duration: 150ms; }
+@media (hover: none) { .actions .more { position: static; opacity: 1; transform: none; pointer-events: auto; box-shadow: none; padding: 0; } }
+.text.edit { display: grid; gap: 6px; }
+.more-row { display: flex; justify-content: center; padding: 8px 0 2px; }
+
+/* ---- bookmark folders ---- */
+button.row.folder { width: calc(100% - 0px); text-align: left; height: auto; font: inherit; color: inherit; grid-template-columns: 26px 1fr auto; }
+button.row.folder:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.caret { font-size: 15px; line-height: 1; display: inline-block; color: var(--ink-soft); transition: transform 180ms var(--ease); }
+.row.folder.open .caret { transform: rotate(90deg); }
+.indent { margin-left: 16px; padding-left: 10px; border-left: 1px solid var(--edge); animation: open 200ms var(--ease); }
+@keyframes open { from { opacity: 0; transform: translateY(-6px); } }
+
+/* ---- a calm entrance when the tab changes (the first 12 rows only), and on first load ---- */
+main.switch > * { animation: rise 220ms var(--ease) backwards; }
+main.switch > :nth-child(n+14) { animation: none; }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+main.switch > :nth-child(2) { animation-delay: 20ms; } main.switch > :nth-child(3) { animation-delay: 40ms; } main.switch > :nth-child(4) { animation-delay: 60ms; } main.switch > :nth-child(5) { animation-delay: 80ms; } main.switch > :nth-child(6) { animation-delay: 100ms; }
+
+/* ---- the Undo toast ---- */
+#toast { position: fixed; left: 50%; bottom: 22px; z-index: 5; display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 16px; border-radius: 999px; background: var(--bar, var(--field)); -webkit-backdrop-filter: blur(20px) saturate(1.4); backdrop-filter: blur(20px) saturate(1.4); box-shadow: 0 0 0 1px var(--edge), 0 10px 30px rgba(0, 0, 0, 0.18); font-size: 13px; opacity: 0; transform: translate(-50%, 14px) scale(0.98); pointer-events: none; transition: opacity 180ms var(--ease), transform 220ms var(--ease); }
+#toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
+#toast[hidden] { display: none; }
+#toast button { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  main.switch > *, .indent { animation: none; }
+  .caret, .tab, #toast, .actions .more, .row { transition: none; }
+}
+.swatch { background: var(--hover); }
+
+@media (prefers-color-scheme: light) { .row { box-shadow: var(--lift); } .row:hover { box-shadow: 0 2px 4px rgba(40, 30, 110, 0.08), 0 12px 28px rgba(70, 50, 150, 0.12); } .note { background: rgba(120, 100, 220, 0.07); } }
+
+.row { scroll-margin-top: 150px; scroll-margin-bottom: 70px; }
+.row:focus-within { box-shadow: 0 0 0 2px var(--accent-soft), 0 6px 20px rgba(70, 50, 150, 0.12); }

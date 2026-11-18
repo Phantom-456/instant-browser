@@ -217,7 +217,7 @@ api.onShow(() => {
 })
 
 input.addEventListener('keydown', (event) => {
-  // The same as the bubbles beside the bar: Cmd+, opens Settings, Cmd+Shift+P opens the Pin Manager.
+  // The same as the bubbles beside the bar: Cmd+, opens Settings, Cmd+Shift+P opens Manage.
   const mod = event.metaKey || event.ctrlKey
   if (mod && event.key === ',') { event.preventDefault(); api.openSettings('General'); return }
   if (mod && event.shiftKey && event.key.toLowerCase() === 's') { event.preventDefault(); api.syncNow(); return }

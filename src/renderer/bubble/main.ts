@@ -14,7 +14,7 @@ const bubble = document.getElementById('bubble') as HTMLButtonElement
 const flyout = document.getElementById('flyout') as HTMLUListElement
 
 bubble.innerHTML = (kind === 'settings' ? ICONS.general : kind === 'sync' ? ICONS.sync : ICONS.manager) ?? ''
-const names = { settings: ['Settings (Command comma)', 'Settings (Cmd+,)'], sync: ['Sync now (Command Shift S)', 'Sync now (Cmd+Shift+S)'], manager: ['Pin Manager (Command Shift P)', 'Pin Manager (Cmd+Shift+P)'] } as const
+const names = { settings: ['Settings (Command comma)', 'Settings (Cmd+,)'], sync: ['Sync now (Command Shift S)', 'Sync now (Cmd+Shift+S)'], manager: ['Manage (Command Shift P)', 'Manage (Cmd+Shift+P)'] } as const
 bubble.setAttribute('aria-label', names[kind][0])
 bubble.title = names[kind][1]
 

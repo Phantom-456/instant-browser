@@ -82,7 +82,7 @@ export class ManagerWindow {
       height: 640,
       minWidth: 560,
       minHeight: 420,
-      title: 'Talaria Pin Manager',
+      title: 'Talaria Manage',
       ...(process.platform === 'darwin'
         ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 18, y: 18 }, vibrancy: 'sidebar' as const, visualEffectState: 'active' as const, backgroundColor: '#00000000' }
         : {}),

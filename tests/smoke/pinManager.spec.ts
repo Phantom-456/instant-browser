@@ -103,3 +103,51 @@ test('the manager lists open windows and pins, and Offload, Rename, Remove, Put 
   const file = join(userData, 'pins', 'pins.json')
   expect(existsSync(file) && JSON.parse(readFileSync(file, 'utf8')).pins.length).toBe(0)
 })
+
+test('Manage: search filters the lists, the tab bar shows one section, and a removed bookmark can be undone for a few seconds', async () => {
+  type Bm = { toggle(url: string, title: string): void; list(): Array<{ url: string }> }
+  await app?.close().catch(() => {})
+  app = await electron.launch({ args: ['.', `--user-data-dir=${mkdtempSync(join(tmpdir(), 'ib-manager2-'))}`, `${base}/`], env: { ...process.env, INSTANT_TEST_PINS: '1' } })
+  await expect.poll(() => app.evaluate(() => !!(globalThis as Record<string, unknown>).__bookmarks), { timeout: 15_000 }).toBe(true)
+  const store = (code: string) => app.evaluate((_e, c) => new Function('b', c)((globalThis as unknown as { __bookmarks: Bm }).__bookmarks), code)
+  await store("b.toggle('https://zebra.example.com/', 'Zebra notes'); b.toggle('https://apple.example.com/', 'Apple page')")
+  await app.evaluate(() => (globalThis as unknown as { __manager: { open(): void } }).__manager.open())
+  await expect.poll(async () => (await text()).includes('zebra notes'), { timeout: 8000 }).toBe(true)
+
+  // Search: only what matches stays.
+  await managerJs("(() => { const s = document.getElementById('search'); s.value = 'zebra'; s.dispatchEvent(new Event('input')); })()")
+  await expect.poll(async () => (await text()).includes('apple page')).toBe(false)
+  expect(await text()).toContain('zebra notes')
+  await managerJs("(() => { const s = document.getElementById('search'); s.value = ''; s.dispatchEvent(new Event('input')); })()")
+
+  // The tab bar: one section at a time, with a count.
+  await managerJs("[...document.querySelectorAll('#tabs .tab')].find((b) => b.textContent.startsWith('Bookmarks')).click()")
+  await expect.poll(async () => (await text()).includes('archive (')).toBe(false)
+  expect(await text()).toContain('apple page')
+  await managerJs("[...document.querySelectorAll('#tabs .tab')].find((b) => b.textContent.startsWith('All')).click()")
+
+  // Arrow keys: Down from the search box goes to the first row, Up goes back to the search box.
+  const key = (k: string) => managerJs(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(k)}, bubbles: true, cancelable: true }))`)
+  await managerJs("[...document.querySelectorAll('#tabs .tab')].find((b) => b.textContent.startsWith('Bookmarks')).click(); document.getElementById('search').focus()")
+  await key('ArrowDown')
+  expect(await managerJs("document.activeElement.closest('.row')?.textContent ?? ''")).toContain('Apple page')
+  await key('ArrowDown')
+  expect(await managerJs("document.activeElement.closest('.row')?.textContent ?? ''")).toContain('Zebra notes')
+  await key('ArrowUp'); await key('ArrowUp')
+  expect(await managerJs("document.activeElement.id")).toBe('search')
+  await managerJs("[...document.querySelectorAll('#tabs .tab')].find((b) => b.textContent.startsWith('All')).click()")
+
+  // Remove: gone from the list at once, the toast offers Undo, and the bookmark is still saved until the time is up.
+  expect(await press('Zebra notes', 'Remove')).toBe(true)
+  const zebraRow = () => managerJs("[...document.querySelectorAll('.row')].some((r) => r.textContent.toLowerCase().includes('zebra notes'))")
+  await expect.poll(zebraRow).toBe(false)
+  expect(await managerJs("document.getElementById('toast').classList.contains('show')")).toBe(true)
+  expect(await store('return b.list().some((x) => x.url.includes("zebra"))')).toBe(true)
+  await managerJs("document.getElementById('toast-undo').click()")
+  await expect.poll(zebraRow).toBe(true)
+  expect(await store('return b.list().some((x) => x.url.includes("zebra"))')).toBe(true)
+
+  // Remove again and wait: now it is really gone.
+  expect(await press('Zebra notes', 'Remove')).toBe(true)
+  await expect.poll(() => store('return b.list().some((x) => x.url.includes("zebra"))'), { timeout: 12_000 }).toBe(false)
+})

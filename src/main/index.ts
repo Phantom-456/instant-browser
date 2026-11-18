@@ -127,7 +127,7 @@ function buildTray(searchBar: SearchBar, openSettings: () => void, updater: () =
       { label: 'Settings', accelerator: 'CommandOrControl+,', click: openSettings },
       { label: 'Sync now', click: () => syncNowOrSettings() },
       pinsMenu(pins()),
-      { label: 'Pin Manager', click: openManager },
+      { label: 'Manage', click: openManager },
       { type: 'separator' },
       ready
         ? { label: `Restart to Update to ${state?.version}`, click: () => updater()?.installNow() }

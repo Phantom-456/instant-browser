@@ -29,14 +29,14 @@ const send = (page: string, events: object[]) =>
   }, { page, events })
 const open = (title: string) => app.evaluate(({ BrowserWindow }, t) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.getTitle().includes(t)), title)
 
-test('three bubbles sit right of the search bar: Settings (a menu on hover), Sync now, and the Pin Manager', async () => {
+test('three bubbles sit right of the search bar: Settings (a menu on hover), Sync now, and Manage', async () => {
   await showBar()
   await expect.poll(async () => (await debug()).visible, { timeout: 8000 }).toBe(true)
   const bar = await barBounds()
   const d = await debug()
   expect(d.settings.x).toBeGreaterThanOrEqual(bar.x + bar.width) // right of the bar
   expect(d.sync.x).toBeGreaterThan(d.settings.x) // Sync now is right of Settings
-  expect(d.manager.x).toBeGreaterThan(d.sync.x) // and just left of the Pin Manager bubble: the Manager is last
+  expect(d.manager.x).toBeGreaterThan(d.sync.x) // and just left of the Manage bubble: the Manager is last
   expect(Math.abs(d.sync.y - d.manager.y)).toBeLessThanOrEqual(1)
   expect(Math.abs(d.settings.y - d.manager.y)).toBeLessThanOrEqual(1)
   expect(d.settings.height).toBe(52)
@@ -49,7 +49,7 @@ test('three bubbles sit right of the search bar: Settings (a menu on hover), Syn
 test('a click on a section in the menu opens Settings and closes the bar; the Manager bubble opens the manager', async () => {
   await showBar()
   await expect.poll(async () => (await debug()).visible).toBe(true)
-  await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.getTitle().includes('Settings') || w.getTitle().includes('Pin Manager')) w.close() })
+  await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.getTitle().includes('Settings') || w.getTitle().includes('Manage')) w.close() })
   // Click the Manager bubble (its window holds only the bubble).
   const manager = (await debug()).manager
   await app.evaluate(({ webContents }, m) => {
@@ -60,18 +60,18 @@ test('a click on a section in the menu opens Settings and closes the bar; the Ma
     wc?.sendInputEvent({ type: 'mouseUp', x: 26, y: 26, button: 'left', clickCount: 1 })
     return m
   }, manager)
-  await expect.poll(() => open('Pin Manager'), { timeout: 8000 }).toBe(true)
+  await expect.poll(() => open('Manage'), { timeout: 8000 }).toBe(true)
   await expect.poll(barVisible).toBe(false)
 })
 
 test('Cmd+, and Cmd+Shift+P in the search field do the same as the bubbles', async () => {
-  await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.getTitle().includes('Settings') || w.getTitle().includes('Pin Manager')) w.close() })
+  await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.getTitle().includes('Settings') || w.getTitle().includes('Manage')) w.close() })
   await showBar()
   await expect.poll(barVisible).toBe(true)
   await send('/search/', [{ type: 'keyDown', keyCode: 'P', modifiers: ['meta', 'shift'] }, { type: 'char', keyCode: 'P', modifiers: ['meta', 'shift'] }])
-  await expect.poll(() => open('Pin Manager'), { timeout: 8000 }).toBe(true)
+  await expect.poll(() => open('Manage'), { timeout: 8000 }).toBe(true)
 
-  await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.getTitle().includes('Pin Manager')) w.close() })
+  await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.getTitle().includes('Manage')) w.close() })
   await showBar()
   await expect.poll(barVisible).toBe(true)
   await send('/search/', [{ type: 'keyDown', keyCode: ',', modifiers: ['meta'] }, { type: 'char', keyCode: ',', modifiers: ['meta'] }])
@@ -86,7 +86,7 @@ const barJs = (code: string) =>
 const toggleBar = () => app.evaluate(() => (globalThis as unknown as { __searchBar: { toggle(): void } }).__searchBar.toggle())
 
 test('the hotkey closes an open bar; what was typed stays when it opens again; the X clears the field', async () => {
-  await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.getTitle().includes('Settings') || w.getTitle().includes('Pin Manager')) w.close() })
+  await app.evaluate(({ BrowserWindow }) => { for (const w of BrowserWindow.getAllWindows()) if (w.getTitle().includes('Settings') || w.getTitle().includes('Manage')) w.close() })
   await showBar()
   await expect.poll(barVisible).toBe(true)
 
