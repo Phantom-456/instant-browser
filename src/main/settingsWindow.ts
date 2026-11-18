@@ -1,4 +1,4 @@
-import { BrowserWindow, app, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import { BrowserWindow, app, clipboard, dialog, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { acceleratorFromKey } from '../shared/accelerator'
 import {
   SETTINGS_ACTION,
@@ -12,6 +12,7 @@ import {
 } from '../shared/ipc'
 import type { SettingsSection } from '../shared/bubbles'
 import type { UpdateState } from '../shared/updateLabel'
+import type { SyncStatus } from '../shared/sync/status'
 import { SEARCH_ENGINES, type Settings } from '../shared/settings'
 import { detectBrowsers } from './browsers'
 import { listDiaProfiles } from './dia'
@@ -35,11 +36,17 @@ export interface SettingsWindowDeps {
   ownHistory: OwnHistory
   /** Rebuild the history in the background after a change. */
   refreshHistory: () => void
+  refreshBrowsers: () => void
+  browserInfo: () => { bookmarkSources: string[]; tabBrowsers: Array<{ name: string; state: 'ok' | 'not-running' | 'denied' | 'error' }> }
   /** Delete the saved copy of the history. */
   clearHistoryCache: () => void
   /** The setting "keep a window ready" changed. */
   refreshWarm: () => void
   updater: { get: () => UpdateState; checkNow: () => void; installNow: () => void }
+  /** Can this computer ask for Touch ID? */
+  touchIdAvailable: () => boolean
+  /** Google Drive sync. */
+  sync: { status: () => SyncStatus; connect: () => Promise<void>; syncNow: () => Promise<void>; disconnect: (deleteRemote: boolean) => Promise<void>; setPassphrase: (p: string) => Promise<void>; unlock: (p: string) => Promise<void>; changePassphrase: (current: string, next: string) => Promise<void>; forgetKey: () => void; makeRecoveryKey: () => Promise<string | null>; unlockWithRecovery: (key: string) => Promise<void> }
 }
 
 export class SettingsWindow {
@@ -60,6 +67,9 @@ export class SettingsWindow {
       if (after.hotkey !== before.hotkey) this.hotkeyOk = this.deps.applyHotkey(after.hotkey)
       if (after.warmWindow !== before.warmWindow) this.deps.refreshWarm()
       if (after.showHistory !== before.showHistory || after.historyOff.join() !== before.historyOff.join()) this.deps.refreshHistory()
+      const sameList = (a: string[], b: string[]) => a.join('\u0000') === b.join('\u0000')
+      if (after.otherBookmarks !== before.otherBookmarks || after.keepCopy !== before.keepCopy || after.watchBrowsers !== before.watchBrowsers || after.liveTabs !== before.liveTabs || after.showHistory !== before.showHistory ||
+          !sameList(after.bookmarksOff, before.bookmarksOff) || !sameList(after.liveTabsOff, before.liveTabsOff) || !sameList(after.historyOff, before.historyOff)) this.deps.refreshBrowsers()
       if (after.launchAtLogin !== before.launchAtLogin) app.setLoginItemSettings({ openAtLogin: after.launchAtLogin })
       return this.view()
     })
@@ -73,6 +83,7 @@ export class SettingsWindow {
   open(section?: SettingsSection): void {
     if (this.win && !this.win.isDestroyed()) {
       this.win.show()
+      this.win.moveTop()
       this.win.focus()
       if (section) this.win.webContents.send(SETTINGS_SECTION, section)
       return
@@ -82,7 +93,7 @@ export class SettingsWindow {
       height: 640,
       minWidth: 640,
       minHeight: 420,
-      title: 'Instant Browser Settings',
+      title: 'Talaria Settings',
       // Mac style: the window buttons sit on a glass sidebar.
       ...(process.platform === 'darwin'
         ? {
@@ -96,6 +107,8 @@ export class SettingsWindow {
       webPreferences: { preload: preloadPath('settings'), sandbox: true, contextIsolation: true, nodeIntegration: false }
     })
     this.win.setMenuBarVisibility(false)
+    // Pins and mini windows float above other windows; this window must float with them (and not hide behind them).
+    this.win.setAlwaysOnTop(true, 'floating')
     this.win.on('closed', () => {
       this.win = null
       this.stopRecording() // never leave the hotkey switched off
@@ -137,7 +150,12 @@ export class SettingsWindow {
       diaProfiles: live ?? this.deps.settings.get().diaProfiles,
       diaProfilesLive: live !== null,
       historySources: availableSources(),
-      update: this.deps.updater.get()
+      bookmarkSources: this.deps.browserInfo().bookmarkSources,
+      tabBrowsers: this.deps.browserInfo().tabBrowsers,
+      tabsAvailable: process.platform === 'darwin',
+      update: this.deps.updater.get(),
+      sync: this.deps.sync.status(),
+      touchIdAvailable: this.deps.touchIdAvailable()
     }
   }
 
@@ -147,7 +165,7 @@ export class SettingsWindow {
         const { response } = await dialog.showMessageBox(this.win!, {
           type: 'warning',
           message: 'Clear browsing data?',
-          detail: 'This signs you out of every site in Instant Browser and removes its cache. Your other browsers are not changed.',
+          detail: 'This signs you out of every site in Talaria and removes its cache. Your other browsers are not changed.',
           buttons: ['Cancel', 'Clear data'],
           defaultId: 0,
           cancelId: 0
@@ -156,6 +174,65 @@ export class SettingsWindow {
           await getWebSession().clearStorageData()
           await getWebSession().clearCache()
         }
+        break
+      }
+      case 'sync-connect':
+        void this.deps.sync.connect() // it waits for the person in the browser: the page asks for the status again
+        break
+      case 'sync-set-passphrase':
+        await this.deps.sync.setPassphrase(action.passphrase)
+        break
+      case 'sync-change-passphrase':
+        await this.deps.sync.changePassphrase(action.current, action.passphrase)
+        break
+      case 'sync-forget-key': {
+        const { response } = await dialog.showMessageBox(this.win!, {
+          type: 'warning',
+          message: 'Remove the key from this computer?',
+          detail: 'Sync stops on this computer until you enter the passphrase again. Your data in Google Drive and on your other computers is not changed.',
+          buttons: ['Remove the key', 'Cancel'],
+          defaultId: 1,
+          cancelId: 1
+        })
+        if (response === 0) this.deps.sync.forgetKey()
+        break
+      }
+      case 'sync-make-recovery': {
+        const key = await this.deps.sync.makeRecoveryKey()
+        if (key) {
+          const { response } = await dialog.showMessageBox(this.win!, {
+            type: 'info',
+            message: 'Your recovery key',
+            detail: `${key}\n\nWrite it down or save it in your password manager now. It is shown only once and Talaria does not keep it. If you lose your passphrase, this key opens your synced data. Anyone who has it can open your data, so keep it private. If you change your passphrase, make a new recovery key.`,
+            buttons: ['I saved it', 'Copy to clipboard'],
+            defaultId: 0
+          })
+          if (response === 1) clipboard.writeText(key)
+        }
+        break
+      }
+      case 'sync-unlock-recovery':
+        await this.deps.sync.unlockWithRecovery(action.key)
+        break
+      case 'sync-unlock':
+        await this.deps.sync.unlock(action.passphrase)
+        break
+      case 'sync-now':
+        await this.deps.sync.syncNow()
+        break
+      case 'sync-disconnect':
+        await this.deps.sync.disconnect(false)
+        break
+      case 'sync-disconnect-delete': {
+        const { response } = await dialog.showMessageBox(this.win!, {
+          type: 'warning',
+          message: 'Disconnect and delete the synced data?',
+          detail: 'The synced file is deleted from your Google Drive and this computer is disconnected. Your pins and settings on this computer stay. Other computers keep their own copies and will no longer sync. This cannot be undone.',
+          buttons: ['Cancel', 'Disconnect and delete'],
+          defaultId: 0,
+          cancelId: 0
+        })
+        if (response === 1) await this.deps.sync.disconnect(true)
         break
       }
       case 'remove-permission':

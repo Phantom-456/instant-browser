@@ -14,6 +14,7 @@ const FLYOUT = { width: 200, height: 52 + 8 + SETTINGS_SECTIONS.length * 30 + 16
  */
 export class SearchBubbles {
   private readonly settings: BrowserWindow
+  private readonly sync: BrowserWindow
   private readonly manager: BrowserWindow
   private bar: BrowserWindow
   private flyoutOpen = false
@@ -21,24 +22,26 @@ export class SearchBubbles {
 
   constructor(
     bar: BrowserWindow,
-    private readonly handlers: { openSettings: (section: SettingsSection) => void; openManager: () => void; closeBar: () => void }
+    private readonly handlers: { openSettings: (section: SettingsSection) => void; openManager: () => void; closeBar: () => void; syncNow: () => void }
   ) {
     this.bar = bar
     this.settings = this.make('settings')
+    this.sync = this.make('sync')
     this.manager = this.make('manager')
     this.attachBar(bar)
 
     ipcMain.on(BUBBLE_ACTION, (event, action: BubbleAction) => {
-      if (this.settings.isDestroyed() || this.manager.isDestroyed()) return
-      if (event.sender !== this.settings.webContents && event.sender !== this.manager.webContents) return
+      if (this.gone()) return
+      if (event.sender !== this.settings.webContents && event.sender !== this.manager.webContents && event.sender !== this.sync.webContents) return
       if (!action || typeof action !== 'object') return
       if (action.kind === 'manager') { handlers.closeBar(); handlers.openManager(); return }
+      if (action.kind === 'sync') { handlers.syncNow(); return } // the bar stays open: you can watch it work
       const known = SETTINGS_SECTIONS.find((s) => s === action.section) ?? 'General'
       handlers.closeBar()
       handlers.openSettings(known)
     })
     ipcMain.on(BUBBLE_HOVER, (event, hover: BubbleHover) => {
-      if (this.settings.isDestroyed() || this.manager.isDestroyed()) return
+      if (this.gone()) return
       if (event.sender !== this.settings.webContents || !hover || hover.kind !== 'settings') return
       this.flyoutOpen = hover.on === true
       this.place()
@@ -48,14 +51,16 @@ export class SearchBubbles {
   attachBar(bar: BrowserWindow): void {
     this.bar = bar
     bar.on('show', () => {
-      if (this.settings.isDestroyed() || this.manager.isDestroyed()) return
+      if (this.gone()) return
       this.place()
       this.settings.showInactive()
+      this.sync.showInactive()
       this.manager.showInactive()
     })
     bar.on('hide', () => {
       this.flyoutOpen = false
       if (!this.settings.isDestroyed()) this.settings.hide()
+      if (!this.sync.isDestroyed()) this.sync.hide()
       if (!this.manager.isDestroyed()) this.manager.hide()
     })
     bar.on('resize', () => {
@@ -64,15 +69,20 @@ export class SearchBubbles {
     bar.on('closed', () => {
       if (!this.quitting) return
       if (!this.settings.isDestroyed()) this.settings.destroy()
+      if (!this.sync.isDestroyed()) this.sync.destroy()
       if (!this.manager.isDestroyed()) this.manager.destroy()
     })
+  }
+
+  private gone(): boolean {
+    return this.settings.isDestroyed() || this.sync.isDestroyed() || this.manager.isDestroyed()
   }
 
   prepareQuit(): void {
     this.quitting = true
   }
 
-  private make(kind: 'settings' | 'manager'): BrowserWindow {
+  private make(kind: 'settings' | 'sync' | 'manager'): BrowserWindow {
     const win = new BrowserWindow({
       width: SIZE, height: SIZE, show: false, frame: false, transparent: true, hasShadow: false, resizable: false, movable: false,
       focusable: false, // using a bubble must not take the keyboard from the search field, or the bar would close
@@ -95,28 +105,31 @@ export class SearchBubbles {
 
   /** Put the bubbles to the right of the bar (to the left if there is no room), level with the text field. */
   place(): void {
-    if (this.bar.isDestroyed() || this.settings.isDestroyed() || this.manager.isDestroyed()) return
+    if (this.bar.isDestroyed() || this.gone()) return
     const b = this.bar.getBounds()
     const area = screen.getDisplayNearestPoint({ x: b.x + b.width / 2, y: b.y + 20 }).workArea
     const room = area.x + area.width - (b.x + b.width)
-    const right = room >= SIZE * 2 + GAP * 2
+    const right = room >= SIZE * 3 + GAP * 2
     const y = b.y + Math.round((60 - SIZE) / 2)
     const gearX = right ? b.x + b.width + GAP : b.x - GAP - SIZE
-    const managerX = right ? gearX + SIZE : gearX - SIZE
+    const syncX = right ? gearX + SIZE : gearX - SIZE // Sync now sits just left of the Pin Manager
+    const managerX = right ? syncX + SIZE : syncX - SIZE
     const flyout = this.flyoutOpen
     const width = flyout ? FLYOUT.width : SIZE
     const height = flyout ? FLYOUT.height : SIZE
     // The menu opens downward; if the bubble is near the right edge the window is moved left so it fits.
     const x = Math.min(gearX, area.x + area.width - width)
     this.settings.setBounds({ x, y, width, height }, false)
+    this.sync.setBounds({ x: syncX, y, width: SIZE, height: SIZE }, false)
     this.manager.setBounds({ x: managerX, y, width: SIZE, height: SIZE }, false)
   }
 
   /** For tests. */
-  debug(): { settings: Electron.Rectangle; manager: Electron.Rectangle; visible: boolean } {
+  debug(): { settings: Electron.Rectangle; sync: Electron.Rectangle; manager: Electron.Rectangle; visible: boolean } {
+    const syncBounds = !this.sync.isDestroyed() ? this.sync.getBounds() : { x: 0, y: 0, width: 0, height: 0 }
     const settingsBounds = !this.settings.isDestroyed() ? this.settings.getBounds() : { x: 0, y: 0, width: 0, height: 0 }
     const managerBounds = !this.manager.isDestroyed() ? this.manager.getBounds() : { x: 0, y: 0, width: 0, height: 0 }
-    const visible = !this.settings.isDestroyed() && !this.manager.isDestroyed() && this.settings.isVisible() && this.manager.isVisible()
-    return { settings: settingsBounds, manager: managerBounds, visible }
+    const visible = !this.gone() && this.settings.isVisible() && this.sync.isVisible() && this.manager.isVisible()
+    return { settings: settingsBounds, sync: syncBounds, manager: managerBounds, visible }
   }
 }

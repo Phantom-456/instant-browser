@@ -11,7 +11,7 @@ import { isTestMode } from './testMode'
 
 export { isTestMode }
 
-/** True when the system sends web links to Instant Browser. */
+/** True when the system sends web links to Talaria. */
 export function isDefaultBrowser(): boolean {
   if (isTestMode()) return process.env.INSTANT_TEST_DEFAULT !== '0'
   return app.isDefaultProtocolClient('https') && app.isDefaultProtocolClient('http')

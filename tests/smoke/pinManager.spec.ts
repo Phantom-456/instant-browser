@@ -46,6 +46,7 @@ test('the manager lists open windows and pins, and Offload, Rename, Remove, Put 
   await app.evaluate(() => (globalThis as unknown as { __manager: { open(): void } }).__manager.open())
   await expect.poll(async () => (await text()).includes('open windows (1)'), { timeout: 8000 }).toBe(true)
   expect(await text()).toContain('managed page') // the open window is listed, with its title
+  expect(await text()).toContain('history (') // the history list is there (read only for other browsers)
 
   // Collapse the window: it becomes a pin in the list, with its page in memory.
   await app.evaluate(async ({ BaseWindow, BrowserWindow }) => {
@@ -72,6 +73,12 @@ test('the manager lists open windows and pins, and Offload, Rename, Remove, Put 
   // Details open a small panel.
   expect(await press('My docs', 'Details')).toBe(true)
   await expect.poll(async () => (await text()).includes('last used')).toBe(true)
+
+  // "Keep here" marks the pin as only on this computer (a chip shows), and "Sync it" undoes it.
+  expect(await press('My docs', 'Keep here')).toBe(true)
+  await expect.poll(async () => (await text()).includes('only on this computer')).toBe(true)
+  expect(await press('My docs', 'Sync it')).toBe(true)
+  await expect.poll(async () => (await text()).includes('only on this computer')).toBe(false)
 
   // Remove goes to the archive (kept), and the pin leaves the screen.
   expect(await press('My docs', 'Remove')).toBe(true)

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { generateGradient } from '../../src/shared/pins/gradient'
 import { createPin, type PinRecord } from '../../src/shared/pins/model'
 import { DEFAULT_SETTINGS } from '../../src/shared/settings'
+import { bookmarkId, type Bookmark } from '../../src/shared/bookmarks'
+import { planApply } from '../../src/shared/sync/apply'
 import { MemoryStorage, syncOnce } from '../../src/shared/sync/engine'
 import { TOMBSTONE_DAYS, applyLocal, emptyDoc, mergeDocs, parseDoc } from '../../src/shared/sync/merge'
 import { PORTABLE_PREF_KEYS, fromSyncPin, portablePrefs, toSyncPin, type SyncPin } from '../../src/shared/sync/portable'
@@ -141,11 +143,14 @@ describe('syncing through a store', () => {
   it('if another computer writes at the same moment, it reads again and merges, and loses nothing', async () => {
     const store = new MemoryStorage()
     await syncOnce(store, changes([sync(pinRecord('pin-00000001'))]), 'mac', 100)
-    store.beforeWrite = () => { // the PC writes first
-      void syncOnce(store, changes([sync(pinRecord('pin-00000003'))]), 'pc', 150)
-    }
+    // The PC writes after the Mac has read and merged, but before the Mac writes.
+    store.beforeWrite = () => store.injectWrite(applyLocal(parseDoc(store.peek()), changes([sync(pinRecord('pin-00000003'))]), 'pc', 150))
     const result = await syncOnce(store, changes([sync(pinRecord('pin-00000002'))]), 'mac', 200)
     expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.attempts).toBe(2) // the first write found the file changed
+      expect(Object.keys(result.doc.pins).sort()).toEqual(['pin-00000001', 'pin-00000002', 'pin-00000003'])
+    }
     const final = await syncOnce(store, changes([]), 'pc', 300)
     if (final.ok) expect(Object.keys(final.doc.pins).sort()).toEqual(['pin-00000001', 'pin-00000002', 'pin-00000003'])
   })
@@ -154,12 +159,21 @@ describe('syncing through a store', () => {
     const store = new MemoryStorage()
     await syncOnce(store, changes([sync(pinRecord('pin-00000001'))]), 'mac', 100)
     let n = 0
-    const originalWrite = store.write.bind(store)
     store.write = async () => { n++; return false }
-    const result = await syncOnce(store, changes([]), 'pc', 200, 3)
+    const result = await syncOnce(store, changes([sync(pinRecord('pin-00000002'))]), 'pc', 200, 3)
     expect(result).toEqual({ ok: false, reason: 'conflict-limit' })
     expect(n).toBe(3)
-    store.write = originalWrite
+  })
+
+  it('does not write when there is nothing new (so computers do not write all the time)', async () => {
+    const store = new MemoryStorage()
+    await syncOnce(store, changes([sync(pinRecord('pin-00000001'))]), 'mac', 100)
+    let writes = 0
+    const write = store.write.bind(store)
+    store.write = async (doc, etag) => { writes++; return write(doc, etag) }
+    const again = await syncOnce(store, changes([sync(pinRecord('pin-00000001'))]), 'mac', 900)
+    expect(again.ok).toBe(true)
+    expect(writes).toBe(0)
   })
 
   it('a pin deleted for good on one computer is gone from the other, and does not return', async () => {
@@ -168,5 +182,89 @@ describe('syncing through a store', () => {
     await syncOnce(store, changes([], ['pin-00000001']), 'pc', 500)
     const old = await syncOnce(store, changes([sync(pinRecord('pin-00000001'))]), 'mac', 400) // the Mac still has it, with an older time
     expect(old.ok && old.doc.pins['pin-00000001']).toBeFalsy()
+  })
+})
+
+describe('bookmarks, history and open pages in the shared file', () => {
+  const bm = (url: string, title = 'T') => ({ id: bookmarkId(url), url, title, createdAt: 1 })
+  const changes = (extra: object = {}) => ({ pins: [], prefs: {}, deleted: [], ...extra })
+
+  it('bookmarking the same page on two computers gives ONE bookmark', () => {
+    const a = applyLocal(emptyDoc(), changes({ bookmarks: [bm('https://example.com/a', 'From the Mac')] }), 'mac', 100)
+    const b = applyLocal(emptyDoc(), changes({ bookmarks: [bm('https://example.com/a', 'From the PC')] }), 'pc', 200)
+    const merged = mergeDocs(a, b, 300)
+    expect(Object.keys(merged.bookmarks)).toEqual([bookmarkId('https://example.com/a')])
+    expect(Object.values(merged.bookmarks)[0]!.bookmark.title).toBe('From the PC') // the newest change wins
+  })
+
+  it('a deleted bookmark stays deleted, and comes back if it is bookmarked again later', () => {
+    const id = bookmarkId('https://example.com/a')
+    const a = applyLocal(emptyDoc(), changes({ bookmarks: [bm('https://example.com/a')] }), 'mac', 100)
+    const gone = applyLocal(a, changes({ deleted: [id] }), 'pc', 500)
+    expect(mergeDocs(gone, a, 600).bookmarks[id]).toBeUndefined()
+    const again = applyLocal(a, changes({ bookmarks: [bm('https://example.com/a', 'Again')] }), 'mac', 900)
+    expect(mergeDocs(gone, again, 1000).bookmarks[id]!.bookmark.title).toBe('Again')
+  })
+
+  it('history is merged by address: the newest visit and the highest count', () => {
+    const a = applyLocal(emptyDoc(), changes({ history: [{ url: 'https://x.com/', visits: 3, lastVisit: 100 }] }), 'mac', 100)
+    const b = applyLocal(emptyDoc(), changes({ history: [{ url: 'https://x.com/', visits: 2, lastVisit: 500 }, { url: 'https://y.com/', visits: 1, lastVisit: 50 }] }), 'pc', 200)
+    const merged = mergeDocs(a, b, 300)
+    expect(merged.history['https://x.com/']).toEqual({ url: 'https://x.com/', visits: 3, lastVisit: 500 })
+    expect(Object.keys(merged.history).sort()).toEqual(['https://x.com/', 'https://y.com/'])
+  })
+
+  it('cleared history does not come back from a computer that was off', () => {
+    const old = applyLocal(emptyDoc(), changes({ history: [{ url: 'https://old.com/', visits: 1, lastVisit: 100 }] }), 'mac', 100)
+    const cleared = applyLocal(old, changes({ historyClearedAt: 1000 }), 'pc', 1000)
+    expect(cleared.history).toEqual({})
+    const merged = mergeDocs(cleared, old, 2000) // the Mac still has the old visit
+    expect(merged.history).toEqual({})
+    const later = applyLocal(merged, changes({ history: [{ url: 'https://new.com/', visits: 1, lastVisit: 1500 }] }), 'mac', 1500)
+    expect(Object.keys(later.history)).toEqual(['https://new.com/']) // new visits after the clear are kept
+  })
+
+  it('keeps only the newest 500 history items', () => {
+    const items = Array.from({ length: 700 }, (_, i) => ({ url: `https://site${i}.com/`, visits: 1, lastVisit: 1000 + i }))
+    const merged = mergeDocs(applyLocal(emptyDoc(), changes({ history: items }), 'mac', 5000), emptyDoc(), 6000)
+    expect(Object.keys(merged.history)).toHaveLength(500)
+    expect(merged.history['https://site699.com/']).toBeDefined()
+    expect(merged.history['https://site0.com/']).toBeUndefined()
+  })
+
+  it('each computer writes only its own open pages; turning it off removes them; a computer not seen for 60 days is forgotten', () => {
+    const tabs = [{ url: 'https://example.com/x', title: 'X', kind: 'window' as const }]
+    const withMac = applyLocal(emptyDoc(), changes({ deviceInfo: { name: 'Work Mac', tabs } }), 'mac', 1000)
+    const withBoth = applyLocal(withMac, changes({ deviceInfo: { name: 'Home PC', tabs: [] } }), 'pc', 2000)
+    expect(Object.keys(withBoth.devices).sort()).toEqual(['mac', 'pc'])
+    expect(applyLocal(withBoth, changes({ deviceInfo: null }), 'mac', 3000).devices.mac).toBeUndefined()
+    expect(applyLocal(withBoth, changes({}), 'mac', 3000).devices.mac).toBeDefined() // not touched when the field is left out
+    const DAY = 86_400_000
+    expect(mergeDocs(withMac, emptyDoc(), 1000 + 61 * DAY).devices).toEqual({})
+  })
+
+  it('a document with bad bookmarks, history or devices is cleaned when read', () => {
+    const doc = parseDoc({
+      version: 1, pins: {}, prefs: {}, tombstones: {},
+      bookmarks: { wrong: { updatedAt: 1, device: 'x', bookmark: { id: 'other', url: 'https://a.com/' } }, ok: { updatedAt: 1, device: 'x', bookmark: { id: 'ok', url: 'javascript:alert(1)' } } },
+      history: { 'file:///etc/passwd': { url: 'file:///etc/passwd', visits: 1, lastVisit: 1 }, 'https://fine.com/': { url: 'https://fine.com/', visits: 2, lastVisit: 9 } },
+      devices: { d1: { updatedAt: 1, name: 'PC', tabs: [{ url: 'https://ok.com/', title: 'ok', kind: 'pin' }, { url: 'javascript:1', title: 'bad', kind: 'window' }] } }
+    })
+    expect(doc.bookmarks).toEqual({})
+    expect(Object.keys(doc.history)).toEqual(['https://fine.com/'])
+    expect(doc.devices.d1!.tabs).toEqual([{ url: 'https://ok.com/', title: 'ok', kind: 'pin' }])
+  })
+
+  it('the plan says what to add, update and remove for bookmarks, and lists the other computers', () => {
+    const id = bookmarkId('https://example.com/a')
+    const doc = applyLocal(emptyDoc(), changes({ bookmarks: [bm('https://example.com/a', 'Renamed')], deviceInfo: { name: 'PC', tabs: [] } }), 'pc', 100)
+    const local: Bookmark[] = [{ id, url: 'https://example.com/a', title: 'Old title', createdAt: 1 }]
+    const plan = planApply(doc, [], 'mac', local)
+    expect(plan.bookmarks.update.map((b) => b.title)).toEqual(['Renamed'])
+    expect(plan.devices.map((d) => d.name)).toEqual(['PC'])
+    expect(planApply(doc, [], 'mac', []).bookmarks.add.map((b) => b.id)).toEqual([id])
+    const deleted = applyLocal(doc, changes({ deleted: [id] }), 'pc', 500)
+    expect(planApply(deleted, [], 'mac', local).bookmarks.remove).toEqual([id])
+    expect(planApply(doc, [], 'pc').devices).toEqual([]) // a computer does not list itself
   })
 })

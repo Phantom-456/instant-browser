@@ -6,8 +6,10 @@
 :root {
   color-scheme: light dark;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --accent: #2f7cf6;
-  --accent-soft: rgba(47, 124, 246, 0.16);
+  /* Candy pink to blue, used everywhere: one accent, one gradient, one slow movement. */
+  --accent: hsl(262 78% 58%);
+  --accent-soft: hsl(262 90% 62% / 0.14);
+  --arc: linear-gradient(100deg, hsl(212 92% 62%), hsl(268 82% 68%), hsl(330 88% 68%), hsl(268 82% 68%), hsl(212 92% 62%));
   --ink: #1d1d1f;
   --ink-soft: rgba(29, 29, 31, 0.62);
   --ink-faint: rgba(29, 29, 31, 0.4);
@@ -20,8 +22,8 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --accent: #5b9bff;
-    --accent-soft: rgba(91, 155, 255, 0.22);
+    --accent: hsl(266 95% 77%);
+    --accent-soft: hsl(266 95% 70% / 0.22);
     --ink: #f5f5f7;
     --ink-soft: rgba(245, 245, 247, 0.66);
     --ink-faint: rgba(245, 245, 247, 0.4);
@@ -39,6 +41,9 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+/* The moving candy gradient. Put class "arc" on anything that should carry it; it flows slowly and stops for reduced motion. */
+.arc, button.primary, .modal-buttons .primary, input[type=checkbox]:checked { background: var(--arc); background-size: 200% 100%; animation: arcflow 10s linear infinite; }
+@keyframes arcflow { to { background-position: 200% 0; } }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body { font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }

@@ -1,5 +1,5 @@
 /*
- * One accent colour (blue). One shape rule: buttons and pills are fully round, cards are 22px.
+ * One accent colour (violet, with the pink to blue candy gradient on buttons). One shape rule: buttons and pills are fully round, cards are 22px.
  * Light and dark follow the system. Motion is small and is turned off for people who ask for less.
  */
 :root {
@@ -9,11 +9,12 @@
   --ink: #1d1d1f;
   --ink-soft: #55555b;
   --line: rgba(0, 0, 0, 0.1);
-  --accent: #1d64e0;          /* white text on this passes AA */
-  --accent-ink: #1d64e0;
-  --accent-soft: rgba(29, 100, 224, 0.1);
-  --glow-a: rgba(150, 190, 255, 0.55);
-  --glow-b: rgba(255, 214, 180, 0.5);
+  --accent: #6d3fd6;          /* white text on this passes AA */
+  --arc: linear-gradient(100deg, hsl(212 92% 56%), hsl(268 82% 60%), hsl(330 88% 60%), hsl(268 82% 60%), hsl(212 92% 56%));
+  --accent-ink: #6d3fd6;
+  --accent-soft: rgba(109, 63, 214, 0.1);
+  --glow-a: rgba(190, 160, 255, 0.55);
+  --glow-b: rgba(255, 170, 215, 0.5);
   --radius: 22px;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --gutter: clamp(16px, 5vw, 56px);
@@ -25,10 +26,10 @@
     --ink: #f5f5f7;
     --ink-soft: #a9adb7;
     --line: rgba(255, 255, 255, 0.12);
-    --accent-ink: #6ea4ff;
-    --accent-soft: rgba(110, 164, 255, 0.14);
-    --glow-a: rgba(60, 110, 190, 0.4);
-    --glow-b: rgba(30, 150, 150, 0.3);
+    --accent-ink: #b79cff;
+    --accent-soft: rgba(183, 156, 255, 0.14);
+    --glow-a: rgba(110, 80, 190, 0.4);
+    --glow-b: rgba(190, 70, 140, 0.3);
   }
 }
 * { box-sizing: border-box; }
@@ -75,6 +76,9 @@ section { padding: clamp(56px, 9vw, 112px) var(--gutter); max-width: 1240px; mar
 .button:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 14px 32px color-mix(in srgb, var(--accent) 40%, transparent); }
 .button:active { transform: scale(0.97); }
 .button.small { min-height: 38px; padding: 0 18px; font-size: 14px; box-shadow: none; }
+.button:not(.ghost) { background: var(--arc); background-size: 200% 100%; animation: arcflow 10s linear infinite; }
+@keyframes arcflow { to { background-position: 200% 0; } }
+@media (prefers-reduced-motion: reduce) { .button:not(.ghost) { animation: none; } }
 .button.ghost { background: var(--accent-soft); color: var(--accent-ink); box-shadow: none; }
 .button .size { font-weight: 400; opacity: 0.8; font-size: 14px; }
 .button[aria-disabled="true"] { opacity: 0.6; pointer-events: none; }

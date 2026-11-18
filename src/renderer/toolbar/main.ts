@@ -18,6 +18,7 @@ const forward = el<HTMLButtonElement>('forward')
 const reload = el<HTMLButtonElement>('reload')
 const collapse = el<HTMLButtonElement>('collapse')
 const follow = el<HTMLButtonElement>('follow')
+const bookmark = el<HTMLButtonElement>('bookmark')
 const send = el<HTMLButtonElement>('send')
 const pick = el<HTMLButtonElement>('pick')
 const close = el<HTMLButtonElement>('close')
@@ -33,6 +34,7 @@ forward.onclick = () => api.action({ type: 'forward' })
 reload.onclick = () => api.action({ type: 'reload' })
 collapse.onclick = () => api.action({ type: 'collapse' })
 follow.onclick = () => api.action({ type: 'follow' })
+bookmark.onclick = () => api.action({ type: 'bookmark' })
 send.onclick = () => api.action({ type: 'send' })
 pick.onclick = () => api.action({ type: 'pick-browser' })
 close.onclick = () => api.action({ type: 'close' })
@@ -57,6 +59,9 @@ api.onState((state) => {
   document.title = state.title
   back.disabled = !state.canGoBack
   forward.disabled = !state.canGoForward
+  bookmark.classList.toggle('on', state.bookmarked)
+  bookmark.innerHTML = (state.bookmarked ? ICONS.starFill : ICONS.star) ?? ''
+  bookmark.title = state.bookmarked ? 'Bookmarked. Click to remove the bookmark.' : 'Bookmark this page'
   follow.classList.toggle('on', state.following)
   follow.title = state.following ? 'Following you to other desktops. Click to stay on this desktop.' : 'Follow me to other desktops'
   reload.innerHTML = state.loading ? ICONS.stop! : ICONS.reload!

@@ -2,7 +2,7 @@ import { ipcRenderer } from 'electron'
 import { feedSwipe, newSwipe, swipeEnded, type SwipeDirection } from '../shared/swipe'
 
 /*
- * Runs in every web page of Instant Browser (a session preload script). It gives the page nothing to call and reads
+ * Runs in every web page of Talaria (a session preload script). It gives the page nothing to call and reads
  * nothing from it. It only watches the trackpad: a two-finger swipe sideways shows an elastic arrow at the edge, and
  * past the line it asks the main process to go back or forward. Like Chrome: only when the page cannot scroll sideways
  * in that direction, and not when the page handled the scroll itself.

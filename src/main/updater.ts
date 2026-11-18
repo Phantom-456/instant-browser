@@ -38,7 +38,7 @@ export class Updater {
     autoUpdater.on('update-downloaded', (info) => {
       this.set({ status: 'ready', version: info.version })
       new Notification({
-        title: 'Instant Browser update is ready',
+        title: 'Talaria update is ready',
         body: `Version ${info.version} is downloaded. Use the menu bar icon, "Restart to update".`
       }).show()
     })

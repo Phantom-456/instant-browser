@@ -13,8 +13,8 @@ test('opened addresses are counted, saved, and found again after a restart', () 
   h.record('https://example.com/a', 2000)
   h.record('https://www.google.com/search?q=cats', 3000)
   expect(h.rows().map((r) => [r.url, r.visits, r.source])).toEqual([
-    ['https://www.google.com/search?q=cats', 1, 'Instant Browser'],
-    ['https://example.com/a', 2, 'Instant Browser']
+    ['https://www.google.com/search?q=cats', 1, 'Talaria'],
+    ['https://example.com/a', 2, 'Talaria']
   ])
   expect(new OwnHistory(path).rows()).toHaveLength(2)
 })

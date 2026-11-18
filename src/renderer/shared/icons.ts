@@ -17,6 +17,10 @@ import clockCounterClockwise from '@phosphor-icons/core/assets/regular/clock-cou
 import globe from '@phosphor-icons/core/assets/regular/globe.svg?raw'
 import circleNotch from '@phosphor-icons/core/assets/regular/circle-notch.svg?raw'
 import pushPin from '@phosphor-icons/core/assets/regular/push-pin.svg?raw'
+import star from '@phosphor-icons/core/assets/regular/star.svg?raw'
+import starFill from '@phosphor-icons/core/assets/fill/star-fill.svg?raw'
+import devices from '@phosphor-icons/core/assets/regular/devices.svg?raw'
+import arrowsClockwise from '@phosphor-icons/core/assets/regular/arrows-clockwise.svg?raw'
 import moon from '@phosphor-icons/core/assets/regular/moon.svg?raw'
 import squaresFour from '@phosphor-icons/core/assets/regular/squares-four.svg?raw'
 
@@ -40,7 +44,11 @@ export const ICONS: Record<string, string> = {
   permissions: squaresFour,
   spinner: circleNotch,
   offload: moon,
+  star,
+  starFill,
+  devices,
   manager: squaresFour,
+  sync: arrowsClockwise,
   history: clockCounterClockwise,
   globe
 }

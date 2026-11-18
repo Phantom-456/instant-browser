@@ -1,5 +1,8 @@
 @import '../shared/glass.css';
 
+/* The same blue, violet and pink as the pins. */
+:root { --arc: linear-gradient(135deg, hsl(224 90% 60%), hsl(268 80% 64%), hsl(334 88% 64%)); }
+
 :root { --surface: #f5f5f7; --card: #ffffff; }
 @media (prefers-color-scheme: dark) { :root { --surface: #1c1c1f; --card: rgba(255, 255, 255, 0.06); } }
 
@@ -35,12 +38,56 @@ h1 { margin: 0 0 20px; font: 600 24px/1.2 -apple-system, BlinkMacSystemFont, "SF
 .row .hint { margin-top: 3px; color: var(--ink-soft); font-size: 12px; line-height: 1.45; }
 .row .warn { color: var(--danger); }
 
-input[type=text], input[type=number], select {
+/* A row with a form (the passphrase): two columns. The words on the left, the fields stacked in a column on the right. */
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); animation: fade 200ms var(--ease); }
+.modal { width: min(460px, calc(100vw - 48px)); max-height: calc(100vh - 48px); overflow: auto; padding: 24px; border-radius: 20px; background: var(--surface, #f5f5f7); box-shadow: 0 0 0 1px var(--edge), 0 24px 70px rgba(0, 0, 0, 0.35); animation: pop 260ms var(--ease); }
+@keyframes pop { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
+.modal .steps { color: var(--ink-faint); font-size: 12px; margin-bottom: 6px; }
+.modal h2 { margin: 0 0 10px; font-size: 19px; font-weight: 650; }
+.modal .lead { margin: 0 0 14px; color: var(--ink-soft); font-size: 13px; line-height: 1.5; }
+.modal-form { display: flex; flex-direction: column; gap: 10px; }
+.modal-form input, .modal input[type=password], .modal input[type=text] { width: 100%; min-width: 0; box-sizing: border-box; }
+.modal .meter { min-height: 16px; font-size: 12px; color: var(--ink-soft); }
+.modal .meter[data-level='too-short'] { color: var(--danger); }
+.modal .meter[data-level='strong'], .modal .meter[data-level='good'] { color: var(--accent); }
+.modal-links { display: flex; gap: 16px; flex-wrap: wrap; }
+.linkish { border: 0; background: none; padding: 0; height: auto; color: var(--accent); font: 500 12.5px/1.2 inherit; cursor: default; border-radius: 0; }
+.linkish:hover { background: none; text-decoration: underline; }
+.modal .check { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; font-size: 13px; color: var(--ink); }
+.modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+.modal-buttons button { height: 34px; padding: 0 18px; }
+.modal-buttons .primary { border-color: transparent; color: #fff; font-weight: 600; }
+.modal-buttons .primary:hover { filter: brightness(1.08); }
+.modal-buttons .primary:disabled { filter: grayscale(0.6); opacity: 0.6; }
+.modal .meter { position: relative; padding-top: 8px; }
+.modal .meter::before { content: ''; position: absolute; left: 0; top: 0; height: 4px; width: 8%; border-radius: 4px; background: var(--arc); background-size: 200% 100%; animation: arcflow 10s linear infinite; transition: width 0.3s var(--ease); }
+.modal .meter[data-level='ok']::before { width: 40%; }
+.modal .meter[data-level='good']::before { width: 70%; }
+.modal .meter[data-level='strong']::before { width: 100%; }
+.modal .meter[data-level='too-short']::before { background: var(--danger); }
+.modal { border: 1px solid transparent; background: linear-gradient(var(--surface, #f5f5f7), var(--surface, #f5f5f7)) padding-box, var(--arc) border-box; background-size: auto, 200% 100%; animation: pop 260ms var(--ease), arcflow-border 10s linear infinite; }
+@keyframes arcflow-border { to { background-position: 0 0, 200% 0; } }
+.modal .hint.warn { min-height: 0; margin-top: 8px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+
+.row.stack { align-items: flex-start; }
+.row.stack:hover { background: transparent; }
+.row.stack .text { flex: 1 1 50%; }
+.row.stack .form { flex: 0 0 min(320px, 44%); display: flex; flex-direction: column; gap: 10px; }
+.row.stack .form input { width: 100%; min-width: 0; box-sizing: border-box; }
+.row.stack .form button { width: 100%; height: 34px; }
+.row.stack .form .hint { margin-top: 0; }
+@media (max-width: 720px) {
+  .row.stack { flex-direction: column; gap: 12px; }
+  .row.stack .form { flex: none; width: 100%; }
+}
+
+input[type=text], input[type=number], input[type=password], select {
   min-width: 200px; height: 32px; padding: 0 14px; border: 0; border-radius: 999px; outline: none;
   background-color: var(--hover); color: var(--ink); font: inherit;
   transition: box-shadow 180ms var(--ease), background-color 180ms var(--ease);
 }
-input[type=text]:focus, input[type=number]:focus, select:focus { background-color: var(--field); box-shadow: 0 0 0 2px var(--accent); }
+input[type=text]:focus, input[type=number]:focus, input[type=password]:focus, select:focus { background-color: var(--field); box-shadow: 0 0 0 2px var(--accent); }
 input[type=number] { min-width: 96px; width: 96px; }
 /* Our own arrow, a little inside the box (the system arrow sat against the edge). */
 select {
@@ -59,7 +106,7 @@ input[type=checkbox]::after {
   content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
   background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); transition: transform 260ms var(--ease);
 }
-input[type=checkbox]:checked { background: var(--accent); }
+input[type=checkbox]:checked { border: 0; }
 input[type=checkbox]:checked::after { transform: translateX(16px); }
 input[type=checkbox]:active::after { width: 24px; }
 input[type=checkbox]:checked:active::after { transform: translateX(12px); }
@@ -70,7 +117,7 @@ button.act {
   font: 500 13px/1 inherit; cursor: pointer;
   transition: background 160ms var(--ease), transform 200ms var(--ease);
 }
-button.act:hover { background: var(--accent); color: #fff; transform: scale(1.04); }
+button.act:hover { background: var(--arc); background-size: 200% 100%; animation: arcflow 10s linear infinite; color: #fff; transform: scale(1.04); }
 button.act:active { transform: scale(0.96); }
 
 .hotkey { display: flex; align-items: center; gap: 10px; }
@@ -80,3 +127,18 @@ button.act:active { transform: scale(0.96); }
 }
 .keys.recording { background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 2px var(--accent); animation: pulse 1.4s var(--ease) infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 5px var(--accent-soft); } }
+
+.row:has(> .facts) { flex-direction: column; align-items: stretch; gap: 12px; padding-bottom: 18px; }
+.row:has(> .facts):hover { background: transparent; }
+.facts { display: grid; gap: 8px; width: 100%; padding: 12px 14px; border-radius: 12px; background: var(--hover); }
+.fact { display: grid; grid-template-columns: minmax(150px, 230px) 1fr; column-gap: 16px; align-items: baseline; font-size: 12.5px; line-height: 1.45; }
+.fact-label { color: var(--ink-soft); }
+.fact-value { color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.facts .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.facts .hint { margin: 2px 0 0; color: var(--ink-soft); font-size: 12px; }
+@media (max-width: 720px) { .fact { grid-template-columns: 1fr; row-gap: 2px; } }
+/* A group on a page: a heading, a short line about it, then a card of options. */
+.group-head { margin: 26px 4px 10px; }
+.group-head:first-of-type { margin-top: 0; }
+.group-head h2 { margin: 0; font: 600 13px/1.3 -apple-system, BlinkMacSystemFont, system-ui, sans-serif; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink-faint, var(--ink)); }
+.group-head p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-soft, var(--ink)); }

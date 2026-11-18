@@ -6,6 +6,7 @@ import {
   SEARCH_HISTORY_CHANGED,
   SEARCH_OPEN_MANAGER,
   SEARCH_OPEN_SETTINGS,
+  SEARCH_SYNC_NOW,
   SEARCH_QUERY,
   SEARCH_RESIZE,
   SEARCH_SHOW,
@@ -36,6 +37,8 @@ export interface SearchBarDeps {
   query: (text: string) => BarResults
   onOpenSettings: (section: SettingsSection) => void
   onOpenManager: () => void
+  /** Cmd+Shift+S in the field. */
+  onSyncNow: () => void
   /** The bar is about to show. */
   onShow: () => void
 }
@@ -70,6 +73,9 @@ export class SearchBar {
       if (!known) return
       this.hide()
       deps.onOpenSettings(known)
+    })
+    ipcMain.on(SEARCH_SYNC_NOW, (event) => {
+      if (event.sender === this.win.webContents) deps.onSyncNow()
     })
     ipcMain.on(SEARCH_OPEN_MANAGER, (event) => {
       if (this.win.isDestroyed() || event.sender !== this.win.webContents) return

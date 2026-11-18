@@ -1,5 +1,4 @@
-import { applyLocal, mergeDocs, parseDoc, type SyncDoc } from './merge'
-import type { PortablePrefKey, SyncPin } from './portable'
+import { applyLocal, mergeDocs, parseDoc, type LocalDocChanges, type SyncDoc } from './merge'
 
 /** Where the shared document lives (the Drive app folder in production, memory in tests). `etag` changes on every write. */
 export interface SyncStorage {
@@ -8,12 +7,7 @@ export interface SyncStorage {
   write(doc: SyncDoc, etag: string | null): Promise<boolean>
 }
 
-export interface LocalChanges {
-  pins: SyncPin[]
-  prefs: Partial<Record<PortablePrefKey, unknown>>
-  /** Ids of pins deleted for good on this device. */
-  deleted: string[]
-}
+export type LocalChanges = LocalDocChanges
 
 export type SyncResult =
   | { ok: true; doc: SyncDoc; attempts: number }
@@ -34,6 +28,8 @@ export async function syncOnce(storage: SyncStorage, local: LocalChanges, device
     }
     const base = parseDoc(remote?.doc ?? null)
     const merged = mergeDocs(base, applyLocal(base, local, device, now), now)
+    // Nothing to tell Drive: do not write (it would only make every computer write all the time).
+    if (remote && stable(merged) === stable(base)) return { ok: true, doc: merged, attempts: attempt }
     try {
       if (await storage.write(merged, remote?.etag ?? null)) return { ok: true, doc: merged, attempts: attempt }
     } catch (error) {
@@ -44,6 +40,11 @@ export async function syncOnce(storage: SyncStorage, local: LocalChanges, device
   return { ok: false, reason: 'conflict-limit' }
 }
 
+/** The document as text with the keys in a fixed order, to compare two documents. */
+function stable(doc: unknown): string {
+  return JSON.stringify(doc, (_key, value) => (value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : 1))) : value))
+}
+
 /** A memory store for tests. */
 export class MemoryStorage implements SyncStorage {
   private doc: unknown = null
@@ -51,6 +52,11 @@ export class MemoryStorage implements SyncStorage {
   online = true
   /** A function that runs once before the next write, to act like another device writing at that moment. */
   beforeWrite: (() => void) | null = null
+
+  /** Tests: the document now (as stored). */
+  peek(): unknown { return this.doc }
+  /** Tests: another computer writes right now, in one step. */
+  injectWrite(doc: unknown): void { this.doc = JSON.parse(JSON.stringify(doc)); this.version++ }
 
   async read() {
     if (!this.online) throw new Error('offline')

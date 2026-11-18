@@ -31,6 +31,8 @@ export interface PinRecord {
   title: string
   /** A name given by the person, or null. */
   label: string | null
+  /** Keep this pin on this computer only: it is not synced. */
+  syncOff: boolean
   /** The website's own icon as a small picture (a data address), or null. The pin shows it instead of the pin icon. */
   icon: string | null
   state: PinState
@@ -86,6 +88,7 @@ export function parsePin(raw: unknown): PinRecord | null {
     url: r.url,
     title: typeof r.title === 'string' ? r.title.slice(0, 300) : '',
     label: typeof r.label === 'string' && r.label.trim() ? r.label.trim().slice(0, MAX_LABEL_LENGTH) : null,
+    syncOff: r.syncOff === true,
     icon: cleanIcon(r.icon),
     state: r.state === 'resident' ? 'resident' : 'offloaded',
     archived: r.archived === true,
@@ -131,6 +134,7 @@ export function createPin(
     url: input.url,
     title: input.title,
     label: null,
+    syncOff: false,
     icon: cleanIcon(input.icon),
     state: 'resident',
     archived: false,

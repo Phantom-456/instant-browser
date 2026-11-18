@@ -51,7 +51,7 @@ export function decideRoute(input: {
   /** The link comes from a terminal or a code editor, and the user wants those in a small window. */
   fromTerminal?: boolean
 }): 'mini' | 'main' {
-  // The router only works while Instant Browser is the default browser. Never lose a link: when in doubt, open it here.
+  // The router only works while Talaria is the default browser. Never lose a link: when in doubt, open it here.
   if (!input.enabled || !input.isDefault) return 'mini'
   if (input.fromTerminal) return 'mini'
   if (input.mask === null || !input.hasMainBrowser) return 'mini'

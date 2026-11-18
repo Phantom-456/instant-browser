@@ -3,7 +3,7 @@ import { describeDefaultBrowser } from '../../src/shared/defaultBrowser'
 
 const base = { platform: 'darwin' as const, isDefault: false, currentApp: 'Safari', packaged: true, inApplicationsFolder: true }
 
-test('when Instant Browser is the default, nothing is offered', () => {
+test('when Talaria is the default, nothing is offered', () => {
   const note = describeDefaultBrowser({ ...base, isDefault: true })
   expect(note.canMakeDefault).toBe(false)
   expect(note.text).toMatch(/is your default browser/)

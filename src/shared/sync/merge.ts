@@ -1,4 +1,4 @@
-import { PORTABLE_PREF_KEYS, SYNC_VERSION, type PortablePrefKey, type SyncPin } from './portable'
+import { PORTABLE_PREF_KEYS, SYNC_VERSION, type PortablePrefKey, type SyncBookmark, type SyncDevice, type SyncHistoryItem, type SyncPin } from './portable'
 
 /**
  * The shared document in the user's Drive app folder. Every item carries the time of its last change and the device
@@ -16,15 +16,31 @@ export interface Stamp { updatedAt: number; device: string }
 export interface PinEntry extends Stamp { pin: SyncPin }
 export interface PrefEntry extends Stamp { value: unknown }
 export interface Tombstone extends Stamp { id: string }
+export interface BookmarkEntry extends Stamp { bookmark: SyncBookmark }
+export interface DeviceEntry extends SyncDevice { updatedAt: number }
+
+/** Limits, so the shared file stays small. */
+export const MAX_SYNC_HISTORY = 500
+export const MAX_SYNC_BOOKMARKS = 5000
+export const MAX_SYNC_DEVICES = 20
+export const DEVICE_STALE_DAYS = 60
 
 export interface SyncDoc {
   version: number
   pins: Record<string, PinEntry>
   prefs: Partial<Record<PortablePrefKey, PrefEntry>>
   tombstones: Record<string, Tombstone>
+  /** One list of bookmarks for the whole account. A bookmark's id is made from its address, so the same page is one bookmark. */
+  bookmarks: Record<string, BookmarkEntry>
+  /** The app's own history, merged by address. */
+  history: Record<string, SyncHistoryItem>
+  /** History older than this was cleared (by any device) and must not come back. */
+  historyClearedAt: number
+  /** The pages each device has open, written only by that device. */
+  devices: Record<string, DeviceEntry>
 }
 
-export const emptyDoc = (): SyncDoc => ({ version: SYNC_VERSION, pins: {}, prefs: {}, tombstones: {} })
+export const emptyDoc = (): SyncDoc => ({ version: SYNC_VERSION, pins: {}, prefs: {}, tombstones: {}, bookmarks: {}, history: {}, historyClearedAt: 0, devices: {} })
 
 /** Is a newer than b? */
 export const newer = (a: Stamp, b: Stamp): boolean => a.updatedAt > b.updatedAt || (a.updatedAt === b.updatedAt && a.device > b.device)
@@ -44,6 +60,26 @@ export function parseDoc(raw: unknown): SyncDoc {
     if (stamp(e) && 'value' in e) doc.prefs[key] = e
   }
   for (const [id, t] of Object.entries(r.tombstones ?? {})) if (stamp(t) && (t as Tombstone).id === id) doc.tombstones[id] = t as Tombstone
+  for (const [id, e] of Object.entries(r.bookmarks ?? {})) {
+    const entry = e as BookmarkEntry
+    if (stamp(entry) && entry.bookmark && entry.bookmark.id === id && typeof entry.bookmark.url === 'string' && /^https?:/i.test(entry.bookmark.url)) {
+      doc.bookmarks[id] = { updatedAt: entry.updatedAt, device: entry.device, bookmark: { id, url: entry.bookmark.url, title: String(entry.bookmark.title ?? '').slice(0, 300), createdAt: Number(entry.bookmark.createdAt) || 0 } }
+    }
+  }
+  for (const [url, h] of Object.entries(r.history ?? {})) {
+    const item = h as SyncHistoryItem
+    if (item && typeof item.url === 'string' && item.url === url && /^https?:/i.test(url) && Number.isFinite(item.visits) && Number.isFinite(item.lastVisit)) doc.history[url] = { url, visits: Math.max(1, Math.round(item.visits)), lastVisit: item.lastVisit }
+  }
+  doc.historyClearedAt = Number.isFinite(r.historyClearedAt) ? Number(r.historyClearedAt) : 0
+  for (const [id, d] of Object.entries(r.devices ?? {})) {
+    const dev = d as DeviceEntry
+    if (dev && typeof dev.name === 'string' && Number.isFinite(dev.updatedAt) && Array.isArray(dev.tabs)) {
+      doc.devices[id] = {
+        updatedAt: dev.updatedAt, name: dev.name.slice(0, 60),
+        tabs: dev.tabs.filter((t) => t && typeof t.url === 'string' && /^https?:/i.test(t.url)).slice(0, 100).map((t) => ({ url: t.url, title: String(t.title ?? '').slice(0, 300), kind: t.kind === 'pin' ? 'pin' as const : 'window' as const }))
+      }
+    }
+  }
   return doc
 }
 
@@ -69,6 +105,39 @@ export function mergeDocs(a: SyncDoc, b: SyncDoc, now: number): SyncDoc {
     else if (t) delete out.tombstones[id] // changed after the deletion: it is back
   }
 
+  // Bookmarks: the same rules as pins (newest change wins, a deletion is a tombstone).
+  for (const e of [...Object.values(a.bookmarks), ...Object.values(b.bookmarks)]) {
+    const old = out.bookmarks[e.bookmark.id]
+    if (!old || newer(e, old)) out.bookmarks[e.bookmark.id] = e
+  }
+  for (const [id, e] of Object.entries(out.bookmarks)) {
+    const t = out.tombstones[id]
+    if (t && newer(t, e)) delete out.bookmarks[id]
+    else if (t) delete out.tombstones[id]
+  }
+  if (Object.keys(out.bookmarks).length > MAX_SYNC_BOOKMARKS) {
+    for (const [id] of Object.entries(out.bookmarks).sort(([, x], [, y]) => x.bookmark.createdAt - y.bookmark.createdAt).slice(0, Object.keys(out.bookmarks).length - MAX_SYNC_BOOKMARKS)) delete out.bookmarks[id]
+  }
+
+  // History: by address, the newest visit and the highest count. Anything at or before the last "clear" is gone for good.
+  out.historyClearedAt = Math.max(a.historyClearedAt, b.historyClearedAt)
+  for (const item of [...Object.values(a.history), ...Object.values(b.history)]) {
+    if (item.lastVisit <= out.historyClearedAt) continue
+    const old = out.history[item.url]
+    out.history[item.url] = old ? { url: item.url, visits: Math.max(old.visits, item.visits), lastVisit: Math.max(old.lastVisit, item.lastVisit) } : { ...item }
+  }
+  const kept = Object.values(out.history).sort((x, y) => y.lastVisit - x.lastVisit).slice(0, MAX_SYNC_HISTORY)
+  out.history = Object.fromEntries(kept.map((h) => [h.url, h]))
+
+  // Devices: the newest entry for each, and devices that were not seen for 60 days are forgotten.
+  for (const [id, d] of [...Object.entries(a.devices), ...Object.entries(b.devices)]) {
+    const old = out.devices[id]
+    if (!old || d.updatedAt > old.updatedAt) out.devices[id] = d
+  }
+  for (const [id, d] of Object.entries(out.devices)) if (now - d.updatedAt > DEVICE_STALE_DAYS * DAY) delete out.devices[id]
+  const newestDevices = Object.entries(out.devices).sort(([, x], [, y]) => y.updatedAt - x.updatedAt).slice(0, MAX_SYNC_DEVICES)
+  out.devices = Object.fromEntries(newestDevices)
+
   for (const key of PORTABLE_PREF_KEYS) {
     const x = a.prefs[key]
     const y = b.prefs[key]
@@ -81,8 +150,21 @@ export function mergeDocs(a: SyncDoc, b: SyncDoc, now: number): SyncDoc {
 // ---- Local changes ----
 
 /** The pins that this device has now, as changes on top of the shared document. */
-export function applyLocal(doc: SyncDoc, local: { pins: SyncPin[]; prefs: Partial<Record<PortablePrefKey, unknown>>; deleted: string[] }, device: string, now: number): SyncDoc {
-  const out: SyncDoc = { version: doc.version, pins: { ...doc.pins }, prefs: { ...doc.prefs }, tombstones: { ...doc.tombstones } }
+export interface LocalDocChanges {
+  pins: SyncPin[]
+  prefs: Partial<Record<PortablePrefKey, unknown>>
+  deleted: string[]
+  /** Left out (undefined) when the person turned that kind of sync off. */
+  bookmarks?: SyncBookmark[]
+  history?: SyncHistoryItem[]
+  /** The app's history was cleared here at this time. */
+  historyClearedAt?: number
+  /** This device's name and open pages. `null` removes them from the shared file. Left out: not touched. */
+  deviceInfo?: SyncDevice | null
+}
+
+export function applyLocal(doc: SyncDoc, local: LocalDocChanges, device: string, now: number): SyncDoc {
+  const out: SyncDoc = { ...doc, pins: { ...doc.pins }, prefs: { ...doc.prefs }, tombstones: { ...doc.tombstones }, bookmarks: { ...doc.bookmarks }, history: { ...doc.history }, devices: { ...doc.devices } }
   for (const pin of local.pins) {
     const old = out.pins[pin.id]
     if (!old || JSON.stringify(old.pin) !== JSON.stringify(pin)) out.pins[pin.id] = { updatedAt: now, device, pin } // only real changes get a new time
@@ -90,6 +172,25 @@ export function applyLocal(doc: SyncDoc, local: { pins: SyncPin[]; prefs: Partia
   for (const id of local.deleted) {
     delete out.pins[id]
     out.tombstones[id] = { id, updatedAt: now, device }
+  }
+  for (const bm of local.bookmarks ?? []) {
+    const old = out.bookmarks[bm.id]
+    if (!old || JSON.stringify(old.bookmark) !== JSON.stringify(bm)) out.bookmarks[bm.id] = { updatedAt: now, device, bookmark: bm }
+  }
+  for (const id of local.deleted) delete out.bookmarks[id] // a deleted bookmark has its tombstone from the loop above
+  if (typeof local.historyClearedAt === 'number' && local.historyClearedAt > out.historyClearedAt) {
+    out.historyClearedAt = local.historyClearedAt
+    out.history = Object.fromEntries(Object.entries(out.history).filter(([, h]) => h.lastVisit > local.historyClearedAt!))
+  }
+  for (const h of local.history ?? []) {
+    if (h.lastVisit <= out.historyClearedAt) continue
+    const old = out.history[h.url]
+    out.history[h.url] = old ? { url: h.url, visits: Math.max(old.visits, h.visits), lastVisit: Math.max(old.lastVisit, h.lastVisit) } : { ...h }
+  }
+  if (local.deviceInfo === null) delete out.devices[device]
+  else if (local.deviceInfo) {
+    const old = out.devices[device]
+    if (!old || old.name !== local.deviceInfo.name || JSON.stringify(old.tabs) !== JSON.stringify(local.deviceInfo.tabs)) out.devices[device] = { updatedAt: now, name: local.deviceInfo.name, tabs: local.deviceInfo.tabs }
   }
   for (const key of PORTABLE_PREF_KEYS) {
     if (!(key in local.prefs)) continue

@@ -25,7 +25,7 @@ export async function listDiaProfiles(): Promise<string[] | null> {
     const names = parseProfileNames(stdout)
     return names.length ? names : null
   } catch {
-    return null // no window, or macOS has not allowed Instant Browser to control Dia
+    return null // no window, or macOS has not allowed Talaria to control Dia
   }
 }
 

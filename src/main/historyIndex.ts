@@ -47,6 +47,12 @@ export class HistoryIndex {
     if (this.currentSignature() !== this.signature) this.scan()
   }
 
+  /** A browser changed a history file: read again, but only when something really changed. */
+  refreshNow(): void {
+    this.lastCheck = Date.now()
+    if (this.currentSignature() !== this.signature) this.scan()
+  }
+
   /** After a setting changed (history on or off, a browser left out). */
   rescan(): void {
     this.scan()
@@ -55,7 +61,7 @@ export class HistoryIndex {
   /** Something was opened from the search bar. It shows in the history at once. */
   noteOwnVisit(url: string): void {
     const now = Date.now()
-    const row: RawVisit = { url, title: '', visits: 1, lastVisit: now, source: 'Instant Browser' }
+    const row: RawVisit = { url, title: '', visits: 1, lastVisit: now, source: 'Talaria' }
     this.history = mergeHistory(this.history, buildHistory([row]))
   }
 
@@ -106,7 +112,7 @@ export class HistoryIndex {
     this.signature = this.currentSignature()
     this.lastCheck = Date.now()
     perf('history: scan starts (separate process)')
-    const child = utilityProcess.fork(workerPath, [], { serviceName: 'Instant Browser history', stdio: 'ignore' })
+    const child = utilityProcess.fork(workerPath, [], { serviceName: 'Talaria history', stdio: 'ignore' })
     this.child = child
     child.on('message', (message: ScanResult) => {
       if (this.stopped || message?.type !== 'result') return
@@ -121,6 +127,11 @@ export class HistoryIndex {
     })
     const request: ScanRequest = { type: 'scan', sources, cachePath: this.cachePath, own: this.own.rows() }
     child.postMessage(request)
+  }
+
+  /** The newest pages from all browsers, for the history list. */
+  pageList(limit: number): Array<{ url: string; title: string; visits: number; lastVisit: number; sources: string[] }> {
+    return [...this.history.pages].sort((a, b) => b.lastVisit - a.lastVisit).slice(0, limit).map((p) => ({ url: p.url, title: p.title, visits: p.visits, lastVisit: p.lastVisit, sources: p.sources }))
   }
 
   /** Local results, ready at once. Remote suggestions come separately. */

@@ -17,9 +17,9 @@ test('the download page and the update setup point at the same GitHub repository
 
 test('the download buttons find the files by the names electron-builder gives them', () => {
   const script = read('site/main.js')
-  // artifactName: Instant-Browser-${version}-mac-${arch}.${ext}  and  ...-win-${arch}.${ext}  (each package has its own file)
-  expect(read('electron-builder.mac.yml')).toMatch(/Instant-Browser-\$\{version\}-mac-\$\{arch\}\.\$\{ext\}/)
-  expect(read('packages/windows/electron-builder.yml')).toMatch(/Instant-Browser-\$\{version\}-win-\$\{arch\}\.\$\{ext\}/)
+  // artifactName: Talaria-${version}-mac-${arch}.${ext}  and  ...-win-${arch}.${ext}  (each package has its own file)
+  expect(read('electron-builder.mac.yml')).toMatch(/Talaria-\$\{version\}-mac-\$\{arch\}\.\$\{ext\}/)
+  expect(read('packages/windows/electron-builder.yml')).toMatch(/Talaria-\$\{version\}-win-\$\{arch\}\.\$\{ext\}/)
   expect(script).toContain('mac-arm64\\.dmg')
   expect(script).toContain('mac-x64\\.dmg')
   expect(script).toContain('win-x64\\.exe')

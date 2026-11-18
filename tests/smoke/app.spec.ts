@@ -72,7 +72,7 @@ test('Cmd+, in a mini window opens settings, and changes are applied and saved',
     page?.sendInputEvent({ type: 'keyDown', keyCode: ',', modifiers: [process.platform === 'darwin' ? 'meta' : 'control'] })
   })
   const settingsPage = async () => {
-    for (const w of app.windows()) if ((await w.title()) === 'Instant Browser Settings') return w
+    for (const w of app.windows()) if ((await w.title()) === 'Talaria Settings') return w
     return null
   }
   await expect.poll(async () => (await settingsPage()) !== null, { timeout: 10_000 }).toBe(true)
@@ -94,12 +94,12 @@ test('Cmd+, in a mini window opens settings, and changes are applied and saved',
   expect(await registered('Control+Alt+Space')).toBe(false)
 
   // The page shows the sections.
-  await expect(page.locator("nav button")).toHaveCount(8)
+  await expect(page.locator("nav button")).toHaveCount(10)
 })
 
 test('hotkey recorder: Change, press new keys, it is saved and active', async () => {
   const find = async () => {
-    for (const w of app.windows()) if ((await w.title()) === 'Instant Browser Settings') return w
+    for (const w of app.windows()) if ((await w.title()) === 'Talaria Settings') return w
     return null
   }
   const page = (await find())!
@@ -166,7 +166,7 @@ test('search bar: suggestions come from the search engine, and the bar grows to 
 
   // The bar window can grow and shrink.
   const height = () =>
-    app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Instant Browser Search')!.getBounds().height)
+    app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Talaria Search')!.getBounds().height)
   await bar.evaluate(() => (window as unknown as { instantSearch: Api }).instantSearch.resize(340))
   await expect.poll(height).toBe(340)
   await bar.evaluate(() => (window as unknown as { instantSearch: Api }).instantSearch.resize(60))
@@ -189,7 +189,7 @@ test('light and dark follow the system', async () => {
 
 const FIXED_BROWSERS = JSON.stringify([{ id: 'company.thebrowser.dia', name: 'Dia' }, { id: 'com.google.Chrome', name: 'Google Chrome' }])
 
-test.describe('link router (Instant Browser is the default browser)', () => {
+test.describe('link router (Talaria is the default browser)', () => {
   const OPTION_COMMAND = String((1 << 19) | (1 << 20))
 
   async function startWith(mask: string, extraEnv: Record<string, string> = {}) {
@@ -376,7 +376,7 @@ test.describe('search bar history and bubbles', () => {
     try {
       await (await page()).evaluate(() => (window as unknown as { instantSearch: { openSettings(s: string): void } }).instantSearch.openSettings('Search engine'))
       const settingsTitle = async () => {
-        for (const w of bar.windows()) if ((await w.title()) === 'Instant Browser Settings') return w
+        for (const w of bar.windows()) if ((await w.title()) === 'Talaria Settings') return w
         return null
       }
       await expect.poll(async () => (await settingsTitle()) !== null, { timeout: 10_000 }).toBe(true)
@@ -544,7 +544,7 @@ test.describe('speed: a ready window, instant feedback, history in another proce
         'https://www.google.com/search?q=brand+new+search+words', 'x', (BigInt(Date.now() + 5000) + 11_644_473_600_000n) * 1000n
       )
       db.close()
-      await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Instant Browser Search')!.showInactive())
+      await a.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.getTitle() === 'Talaria Search')!.showInactive())
       await expect.poll(terms, { timeout: 10_000 }).toContain('brand new search words')
       // The bar was visible, so it was told.
       expect(await bar.evaluate(() => (window as unknown as { __changed: number }).__changed)).toBeGreaterThan(0)
@@ -642,7 +642,7 @@ test.describe('links from terminals, and the default browser note', () => {
       await bar.evaluate(() => (window as unknown as { instantSearch: { openSettings(s: string): void } }).instantSearch.openSettings('General'))
       const settings = await (async () => {
         for (let i = 0; i < 100; i++) {
-          for (const w of launched.windows()) if ((await w.title()) === 'Instant Browser Settings') return w
+          for (const w of launched.windows()) if ((await w.title()) === 'Talaria Settings') return w
           await new Promise((r) => setTimeout(r, 100))
         }
         throw new Error('settings page not found')

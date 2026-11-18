@@ -10,6 +10,7 @@ interface InstantSearch {
   query(text: string): Promise<BarResults>
   openSettings(section: string): void
   openManager(): void
+  syncNow(): void
   onHistoryChanged(callback: () => void): void
 }
 const api = (window as unknown as { instantSearch: InstantSearch }).instantSearch
@@ -23,7 +24,7 @@ const EMPTY: BarResults = { query: '', searches: [], pages: [] }
 
 /** One thing the user can pick. */
 interface Item {
-  type: 'search' | 'suggest' | 'page'
+  type: 'search' | 'suggest' | 'page' | 'bookmark'
   label: string
   /** Text for a search, address for a page, section for a setting. */
   value: string
@@ -40,7 +41,7 @@ let selected = -1 // -1 means the typed text
 let timer: number | undefined
 let ask = 0 // answers that arrive late are ignored
 
-const SHORT: Record<string, string> = { 'Google Chrome': 'Chrome', 'Microsoft Edge': 'Edge', 'Instant Browser': 'This app' }
+const SHORT: Record<string, string> = { 'Google Chrome': 'Chrome', 'Microsoft Edge': 'Edge', 'Talaria': 'This app' }
 const tagsOf = (sources: string[]) => {
   const names = sources.map((s) => SHORT[s] ?? s)
   return names.length > 2 ? [...names.slice(0, 2), `+${names.length - 2}`] : names
@@ -50,8 +51,10 @@ const hostOf = (url: string) => { try { return new URL(url).host.replace(/^www\.
 function groups(): Group[] {
   const out: Group[] = []
   const searches: Item[] = local.searches.map((s) => ({ type: 'search', label: s.term, value: s.term, tags: tagsOf(s.sources) }))
+  const marks: Item[] = (local.bookmarks ?? []).map((b) => ({ type: 'bookmark', label: b.title, value: b.url, sub: hostOf(b.url) }))
   const pages: Item[] = local.pages.map((p) => ({ type: 'page', label: p.title, value: p.url, sub: hostOf(p.url), tags: tagsOf(p.sources) }))
   if (typed.trim() === '') {
+    if (marks.length) out.push({ title: 'Bookmarks', style: 'rows', items: marks })
     if (searches.length) out.push({ title: 'Recent searches', style: 'bubbles', items: searches })
     if (pages.length) out.push({ title: 'Recently visited', style: 'rows', items: pages })
     return out
@@ -61,21 +64,24 @@ function groups(): Group[] {
     .filter((t) => !known.has(t.toLowerCase()))
     .slice(0, 6)
     .map((t) => ({ type: 'suggest', label: t, value: t }))
-  // Your own history comes first: it is about you. The search engine's suggestions follow.
+  // Your bookmarks and your own history come first: they are about you. The search engine's suggestions follow.
+  if (marks.length) out.push({ title: 'Bookmarks', style: 'rows', items: marks })
   if (searches.length || pages.length) out.push({ title: 'From your history', style: 'rows', items: [...searches, ...pages] })
   if (suggestions.length) out.push({ title: 'Suggestions', style: 'rows', items: suggestions })
   return out
 }
 
 function iconFor(item: Item): string {
-  return ICONS[item.type === 'search' ? 'history' : item.type === 'page' ? 'globe' : 'search'] ?? ''
+  return ICONS[item.type === 'search' ? 'history' : item.type === 'page' ? 'globe' : item.type === 'bookmark' ? 'starFill' : 'search'] ?? ''
 }
 
 function activate(item: Item): void {
   api.submit(item.value)
 }
 
-function draw(): void {
+function draw(still = false): void {
+  // `still`: the same list, changed a little (new suggestions, new history). Do not replay the entrance animation.
+  results.classList.toggle('still', still)
   const list = groups()
   flat = list.flatMap((g) => g.items)
   let index = 0
@@ -138,10 +144,12 @@ function select(index: number): void {
   const item = flat[index]
   // Searches and suggestions fill the field, so the user can change them. Pages do not.
   input.value = item && (item.type === 'search' || item.type === 'suggest') ? item.value : typed
-  draw()
+  // Only move the highlight. Drawing the list again would replay its entrance animation on every arrow key.
+  results.querySelectorAll('.row, .bubble').forEach((el, i) => el.classList.toggle('on', i === index))
+  results.querySelector('.on')?.scrollIntoView({ block: 'nearest' })
 }
 
-async function refresh(text: string): Promise<void> {
+async function refresh(text: string, still = false): Promise<void> {
   const mine = ++ask
   window.clearTimeout(timer)
   const answer = await api.query(text) // instant: it comes from memory
@@ -149,13 +157,13 @@ async function refresh(text: string): Promise<void> {
   local = answer
   if (!text.trim()) remote = []
   selected = -1
-  draw()
+  draw(still)
   if (!text.trim()) return
   timer = window.setTimeout(() => {
     void api.suggest(text).then((list) => {
       if (mine !== ask) return // the text changed while we waited
       remote = list
-      draw()
+      draw(true)
     })
   }, 90)
 }
@@ -192,7 +200,7 @@ input.addEventListener('input', () => {
 // Newer history is ready (read in the background): show it without moving what the user is doing.
 api.onHistoryChanged(() => {
   const keep = selected
-  void refresh(typed).then(() => { if (keep < flat.length) { selected = keep; draw() } })
+  void refresh(typed, true).then(() => { if (keep < flat.length) { selected = keep; draw(true) } })
 })
 
 api.onShow(() => {
@@ -212,6 +220,7 @@ input.addEventListener('keydown', (event) => {
   // The same as the bubbles beside the bar: Cmd+, opens Settings, Cmd+Shift+P opens the Pin Manager.
   const mod = event.metaKey || event.ctrlKey
   if (mod && event.key === ',') { event.preventDefault(); api.openSettings('General'); return }
+  if (mod && event.shiftKey && event.key.toLowerCase() === 's') { event.preventDefault(); api.syncNow(); return }
   if (mod && event.shiftKey && event.key.toLowerCase() === 'p') { event.preventDefault(); api.openManager(); return }
   if (mod && event.key.toLowerCase() === 'w') { event.preventDefault(); api.cancel(); return }
   if (event.key === 'ArrowDown' && flat.length) {
@@ -226,7 +235,7 @@ input.addEventListener('keydown', (event) => {
     void refresh(typed)
   } else if (event.key === 'Enter') {
     const item = flat[selected]
-    if (item && item.type === 'page') activate(item)
+    if (item && (item.type === 'page' || item.type === 'bookmark')) activate(item)
     else if (input.value.trim()) api.submit(input.value)
   } else if (event.key === 'Escape') {
     api.cancel()

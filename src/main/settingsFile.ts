@@ -4,6 +4,8 @@ import { mergeSettings, type Settings } from '../shared/settings'
 
 export class SettingsFile {
   private current: Settings
+  /** Called after a change is saved (sync listens). */
+  onChange: (() => void) | null = null
 
   constructor(private readonly path: string) {
     let raw: unknown = null
@@ -23,6 +25,7 @@ export class SettingsFile {
     this.current = mergeSettings({ ...this.current, ...patch })
     mkdirSync(dirname(this.path), { recursive: true })
     writeFileSync(this.path, JSON.stringify(this.current, null, 2))
+    this.onChange?.()
     return this.current
   }
 }

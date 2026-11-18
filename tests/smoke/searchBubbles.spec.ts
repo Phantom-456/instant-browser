@@ -21,7 +21,7 @@ const barVisible = () => app.evaluate(({ BrowserWindow }) => {
   })
   return !!bar && !bar.isDestroyed() && bar.isVisible()
 })
-const debug = () => app.evaluate(() => (globalThis as unknown as { __bubbles: { debug(): { settings: Rect; manager: Rect; visible: boolean } } }).__bubbles.debug())
+const debug = () => app.evaluate(() => (globalThis as unknown as { __bubbles: { debug(): { settings: Rect; sync: Rect; manager: Rect; visible: boolean } } }).__bubbles.debug())
 const send = (page: string, events: object[]) =>
   app.evaluate(({ webContents }, a) => {
     const wc = webContents.getAllWebContents().find((w) => w.getURL().includes(a.page))
@@ -29,13 +29,15 @@ const send = (page: string, events: object[]) =>
   }, { page, events })
 const open = (title: string) => app.evaluate(({ BrowserWindow }, t) => BrowserWindow.getAllWindows().some((w) => w.isVisible() && w.getTitle().includes(t)), title)
 
-test('two bubbles sit right of the search bar, with Settings opening a menu on hover', async () => {
+test('three bubbles sit right of the search bar: Settings (a menu on hover), Sync now, and the Pin Manager', async () => {
   await showBar()
   await expect.poll(async () => (await debug()).visible, { timeout: 8000 }).toBe(true)
   const bar = await barBounds()
   const d = await debug()
   expect(d.settings.x).toBeGreaterThanOrEqual(bar.x + bar.width) // right of the bar
-  expect(d.manager.x).toBeGreaterThan(d.settings.x) // the Manager bubble is right of Settings
+  expect(d.sync.x).toBeGreaterThan(d.settings.x) // Sync now is right of Settings
+  expect(d.manager.x).toBeGreaterThan(d.sync.x) // and just left of the Pin Manager bubble: the Manager is last
+  expect(Math.abs(d.sync.y - d.manager.y)).toBeLessThanOrEqual(1)
   expect(Math.abs(d.settings.y - d.manager.y)).toBeLessThanOrEqual(1)
   expect(d.settings.height).toBe(52)
 

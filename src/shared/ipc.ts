@@ -3,6 +3,7 @@ import type { SavedPermission } from './permissions'
 import type { DefaultBrowserNote } from './defaultBrowser'
 import type { Settings } from './settings'
 import type { UpdateState } from './updateLabel'
+import type { SyncStatus } from './sync/status'
 
 export const SEARCH_SUBMIT = 'search:submit'
 export const SEARCH_CANCEL = 'search:cancel'
@@ -13,6 +14,7 @@ export const SEARCH_QUERY = 'search:query'
 export const SEARCH_OPEN_SETTINGS = 'search:open-settings'
 export const SEARCH_HISTORY_CHANGED = 'search:history-changed'
 export const SEARCH_OPEN_MANAGER = 'search:open-manager'
+export const SEARCH_SYNC_NOW = 'search:sync-now'
 
 /** A two-finger swipe in a web page: can the history go that way, and go. */
 export const PAGE_SWIPE = 'page:swipe'
@@ -21,7 +23,7 @@ export const PAGE_SWIPE_CAN = 'page:swipe-can'
 export const BUBBLE_ACTION = 'bubble:action'
 export const BUBBLE_HOVER = 'bubble:hover'
 /** What a bubble beside the search bar asks for. */
-export type BubbleAction = { kind: 'settings'; section?: string } | { kind: 'manager' }
+export type BubbleAction = { kind: 'settings'; section?: string } | { kind: 'manager' } | { kind: 'sync' }
 export type BubbleHover = { kind: 'settings' | 'manager'; on: boolean }
 
 export const TOOLBAR_ACTION = 'toolbar:action'
@@ -33,6 +35,7 @@ export type ToolbarAction =
   | { type: 'reload' }
   | { type: 'navigate'; text: string }
   | { type: 'collapse' }
+  | { type: 'bookmark' }
   | { type: 'follow' }
   | { type: 'send' }
   | { type: 'pick-browser' }
@@ -45,6 +48,8 @@ export interface ToolbarState {
   canGoForward: boolean
   /** The window follows the user to other desktops. */
   following: boolean
+  /** The page is bookmarked (the star is filled). */
+  bookmarked: boolean
   loading: boolean
   error: string | null
 }
@@ -64,6 +69,8 @@ export interface ManagerRow {
   archived: boolean
   archivedAt: number | null
   following: boolean
+  /** Kept on this computer only: never sent to Google Drive. */
+  syncOff: boolean
   /** The website's icon, or null. */
   icon: string | null
   /** The pin's own colours, as CSS. */
@@ -74,8 +81,24 @@ export interface ManagerRow {
   pictureBytes: number
   scrollY: number | null
 }
+export interface ManagerBookmark { id: string; title: string; url: string; createdAt: number; syncOff: boolean }
+export interface ManagerDevice { id: string; name: string; updatedAt: number; tabs: Array<{ url: string; title: string; kind: 'window' | 'pin' }> }
+export interface ManagerHistoryRow { url: string; title: string; visits: number; lastVisit: number; sources: string[]; /** Opened from Talaria: can be deleted here. */ own: boolean }
+/** A folder of the bookmarks from your other browsers (the folders of all browsers merged). */
+export interface ManagerMarkFolder { name: string; folders: ManagerMarkFolder[]; marks: Array<{ url: string; title: string; sources: string[]; addedAt: number }> }
+export interface ManagerLiveTab { browser: string; url: string; title: string; /** When Talaria first noticed the tab. */ firstSeen: number }
 export interface ManagerView {
+  /** Bookmarks of your other browsers, merged by address (read only). */
+  browserMarks: { count: number; tree: ManagerMarkFolder }
+  /** Open tabs of your other browsers (only when "list open tabs" is on). */
+  tabs: ManagerLiveTab[]
+  /** Recent pages from this app and your other browsers (other browsers: read only). */
+  history: ManagerHistoryRow[]
   pins: ManagerRow[]
+  /** The bookmarks (the same on every computer when sync is on). */
+  bookmarks: ManagerBookmark[]
+  /** The pages your other computers have open (only with sync and "share what I have open"). */
+  devices: ManagerDevice[]
   archive: ManagerRow[]
   /** Open (expanded) windows. They are not pins. */
   windows: Array<{ id: number; title: string; url: string }>
@@ -87,6 +110,11 @@ export type ManagerAction =
   | { type: 'open' | 'offload' | 'archive' | 'follow' | 'put-back' | 'delete'; id: string }
   | { type: 'rename'; id: string; text: string }
   | { type: 'show-window' | 'close-window'; windowId: number }
+  | { type: 'open-url'; url: string }
+  | { type: 'remove-bookmark'; id: string }
+  | { type: 'pin-local' | 'bookmark-local'; id: string; off: boolean }
+  | { type: 'history-delete'; url: string }
+  | { type: 'bookmark-edit'; id: string; title: string; url: string }
 
 export const PREVIEW_STATE = 'preview:state'
 export const PREVIEW_ACTION = 'preview:action'
@@ -180,7 +208,7 @@ export interface SettingsView {
   permissions: SavedPermission[]
   about: { app: string; electron: string; chromium: string }
   platform: string
-  /** Instant Browser is the system default browser. */
+  /** Talaria is the system default browser. */
   isDefaultBrowser: boolean
   /** What to tell the user about the default browser, and whether the "Make default" button works. */
   defaultBrowser: DefaultBrowserNote
@@ -190,7 +218,17 @@ export interface SettingsView {
   diaProfilesLive: boolean
   /** Browsers whose history can be read. */
   historySources: string[]
+  /** Browsers whose bookmarks can be read. */
+  bookmarkSources: string[]
+  /** Open tabs: what happened when each browser was asked (empty while the switch is off). */
+  tabBrowsers: Array<{ name: string; state: 'ok' | 'not-running' | 'denied' | 'error' }>
+  /** Open tabs can be listed on this system (a Mac). */
+  tabsAvailable: boolean
   update: UpdateState
+  /** Google Drive sync. */
+  sync: SyncStatus
+  /** This computer can ask for Touch ID. */
+  touchIdAvailable: boolean
 }
 
 export type SettingsAction =
@@ -204,6 +242,12 @@ export type SettingsAction =
   | { type: 'make-default-browser' }
   | { type: 'install-update' }
   | { type: 'hotkey-record-cancel' }
+  | { type: 'sync-connect' | 'sync-now' | 'sync-disconnect' | 'sync-disconnect-delete' }
+  | { type: 'sync-set-passphrase' | 'sync-unlock'; passphrase: string }
+  | { type: 'sync-change-passphrase'; current: string; passphrase: string }
+  | { type: 'sync-forget-key' }
+  | { type: 'sync-make-recovery' }
+  | { type: 'sync-unlock-recovery'; key: string }
 
 /** Sent to the settings page while it records a new hotkey. */
 export interface HotkeyEvent {
@@ -215,6 +259,8 @@ export interface HotkeyEvent {
 /** What the search bar shows besides the search suggestions. Built from local data, so it is instant. */
 export interface BarResults {
   query: string
+  /** Bookmarks that match (all of the newest ones when nothing is typed). */
+  bookmarks?: Array<{ title: string; url: string }>
   searches: Array<{ term: string; sources: string[] }>
   pages: Array<{ title: string; url: string; sources: string[] }>
 }

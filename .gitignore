@@ -4,3 +4,6 @@ dist/
 dist.noindex/
 test-results/
 .DS_Store
+
+# Local secrets (the Google login key). Never committed, never published.
+.env.local

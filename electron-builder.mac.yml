@@ -9,7 +9,7 @@ mac:
   target:
     - { target: dmg, arch: [arm64, x64] }
     - { target: zip, arch: [arm64, x64] }
-  artifactName: Instant-Browser-${version}-mac-${arch}.${ext}
+  artifactName: Talaria-${version}-mac-${arch}.${ext}
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
@@ -19,7 +19,7 @@ mac:
   notarize: false
   extendInfo:
     LSUIElement: true
-    NSAppleEventsUsageDescription: Instant Browser asks Dia to open a link in the profile you choose.
+    NSAppleEventsUsageDescription: Talaria asks Dia to open a link in the profile you choose, and (only if you turn on "List open tabs") reads the open tabs of your browsers.
     # macOS lists an app under "Default web browser" only when it also views HTML documents, as every browser does.
     CFBundleDocumentTypes:
       - CFBundleTypeName: HTML document
@@ -34,7 +34,7 @@ mac:
         LSItemContentTypes: [public.xhtml]
 
 dmg:
-  title: Install Instant Browser
+  title: Install Talaria
   background: build/dmg-background.png
   iconSize: 96
   window: { width: 660, height: 400 }

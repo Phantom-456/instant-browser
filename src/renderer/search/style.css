@@ -56,3 +56,4 @@ html, body { background: transparent; overflow: hidden; }
 .row.on { background: var(--accent-soft); }
 .row:hover .ico, .row.on .ico { color: var(--accent); }
 @keyframes item { from { opacity: 0; transform: translateY(5px); } }
+#results.still .group, #results.still .row, #results.still .bubble { animation: none; }

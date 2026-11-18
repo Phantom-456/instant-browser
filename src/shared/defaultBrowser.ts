@@ -1,6 +1,6 @@
 export interface DefaultBrowserInfo {
   platform: NodeJS.Platform
-  /** macOS sends web links to Instant Browser. */
+  /** macOS sends web links to Talaria. */
   isDefault: boolean
   /** The name of the app macOS sends web links to now (for example "Safari"), when known. */
   currentApp: string | null
@@ -20,11 +20,11 @@ export interface DefaultBrowserNote {
 /** What the Settings page tells the user about the default browser. */
 export function describeDefaultBrowser(info: DefaultBrowserInfo): DefaultBrowserNote {
   if (info.isDefault) {
-    return { text: 'Instant Browser is your default browser. Links you click in other apps reach it first.', canMakeDefault: false, warning: null }
+    return { text: 'Talaria is your default browser. Links you click in other apps reach it first.', canMakeDefault: false, warning: null }
   }
-  const now = info.currentApp ? `Links go to ${info.currentApp} now.` : 'Instant Browser is not your default browser.'
+  const now = info.currentApp ? `Links go to ${info.currentApp} now.` : 'Talaria is not your default browser.'
   if (info.platform === 'win32') {
-    return { text: `${now} Windows lets only you choose: open Settings, Apps, Default apps and pick Instant Browser.`, canMakeDefault: false, warning: null }
+    return { text: `${now} Windows lets only you choose: open Settings, Apps, Default apps and pick Talaria.`, canMakeDefault: false, warning: null }
   }
   if (info.platform !== 'darwin') {
     return { text: now, canMakeDefault: false, warning: null }
@@ -35,6 +35,6 @@ export function describeDefaultBrowser(info: DefaultBrowserInfo): DefaultBrowser
   return {
     text: `${now} Click "Make default". macOS asks you to confirm. Nothing changes until you do.`,
     canMakeDefault: true,
-    warning: info.inApplicationsFolder ? null : 'Move Instant Browser to the Applications folder first, so macOS keeps finding it.'
+    warning: info.inApplicationsFolder ? null : 'Move Talaria to the Applications folder first, so macOS keeps finding it.'
   }
 }

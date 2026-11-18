@@ -1,6 +1,6 @@
-# Instant Browser
+# Talaria (QuickPeek)
 
-Instant Browser is a small background app for Mac (a Windows package is in progress). You press a hotkey, type a search, and a small one-tab browser window opens on top of the app you are working in. You can close it, or send the page to any browser you have installed.
+Talaria (QuickPeek) is a small background app for Mac (a Windows package is in progress). You press a hotkey, type a search, and a small one-tab browser window opens on top of the app you are working in. You can close it, or send the page to any browser you have installed.
 
 ## Two packages
 
@@ -100,6 +100,19 @@ Open it from the menu bar icon (Pin Manager), from the round bubble to the right
 macOS does not tell apps the names or numbers of your desktops, so pins are listed in one place. A pin whose desktop is gone is still listed and opens from here.
 
 The round **Settings** bubble beside the search bar opens a menu of settings sections when you hover it (Cmd+, does the same from the keyboard).
+
+## Google Drive sync (optional)
+
+Settings, Sync, **Connect Google Drive**. Your normal browser opens Google's page; you sign in and allow one permission: the app data folder of your Drive (`drive.appdata`). That is one hidden folder only this app can see. The app cannot see the rest of your Drive.
+
+- **Locked on your computer first.** You choose a passphrase once. The synced file is encrypted (AES-256-GCM) before it is uploaded, so Google only holds scrambled data. Type the same passphrase once on each other computer. If you forget it and have no other unlocked computer, the synced data cannot be recovered (you delete the file and start again).
+- **Synced:** your pins (address, title, the name you gave, archived or not), your **bookmarks** (one list for your whole account; the star in the window toolbar), a short list of settings, and, with their own switches, **history** you made in this app and the **pages open on each computer** (shown in the Pin Manager with "Open here"). Pins from another computer arrive released and never open a window by themselves.
+- **Never synced:** passwords, cookies, logged-in sessions, site data, saved pictures of released pages, where windows and pins sit on screen, and the history of your other browsers.
+- **Sync now:** Settings, Sync, or the first item in the menu of the Settings bubble beside the search bar, or Cmd+Shift+S in the search field, or the menu bar icon. It also syncs when you quit the app (at most 4 seconds) and before the computer sleeps, and again after it wakes.
+- It syncs a few seconds after a change, every 10 minutes, and at start. Offline is fine: it tries again later. When two computers change the same pin, the newest change wins. A pin deleted for good on one computer is deleted on the others.
+- **Disconnect** stops syncing on this computer. **Disconnect and delete synced data** also deletes the file from your Drive. You can also remove the permission at myaccount.google.com/permissions.
+- Builds made without a Google login key (for example from the public code) show "This build cannot connect to Google Drive." To make your own, create a Google Cloud desktop client and put `MAIN_VITE_GOOGLE_CLIENT_ID` and `MAIN_VITE_GOOGLE_CLIENT_SECRET` in a file named `.env.local` (never commit it).
+- The privacy policy is on the download page (privacy.html).
 
 ## Search bar history
 

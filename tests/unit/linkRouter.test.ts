@@ -22,7 +22,7 @@ test('the route: mini window only for the key combination, otherwise the main br
   expect(decideRoute({ ...base, required: [...base.required], mask: OPTION | COMMAND })).toBe('mini')
   expect(decideRoute({ ...base, required: [...base.required], mask: 0 })).toBe('main')
 })
-test('router is off unless Instant Browser is the default browser and the setting is on', () => {
+test('router is off unless Talaria is the default browser and the setting is on', () => {
   const base = { required: ['option', 'command'], mask: 0, hasMainBrowser: true }
   expect(decideRoute({ ...base, enabled: true, isDefault: false })).toBe('mini')
   expect(decideRoute({ ...base, enabled: false, isDefault: true })).toBe('mini')

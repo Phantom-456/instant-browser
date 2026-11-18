@@ -63,7 +63,7 @@ test('main browser: the wanted one, else the first', () => {
 import { urlsFromArgv } from '../../src/shared/browserCommands'
 
 test('web URLs are taken from command line arguments', () => {
-  expect(urlsFromArgv(['C:\\Apps\\Instant Browser.exe', '--flag', 'https://example.com/a', 'file:///x', 'notes.txt'])).toEqual([
+  expect(urlsFromArgv(['C:\\Apps\\Talaria.exe', '--flag', 'https://example.com/a', 'file:///x', 'notes.txt'])).toEqual([
     'https://example.com/a'
   ])
   expect(urlsFromArgv([])).toEqual([])

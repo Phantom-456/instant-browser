@@ -11,6 +11,7 @@ const SEARCH_RESIZE = 'search:resize'
 const SEARCH_QUERY = 'search:query'
 const SEARCH_OPEN_SETTINGS = 'search:open-settings'
 const SEARCH_OPEN_MANAGER = 'search:open-manager'
+const SEARCH_SYNC_NOW = 'search:sync-now'
 const SEARCH_HISTORY_CHANGED = 'search:history-changed'
 
 contextBridge.exposeInMainWorld('instantSearch', {
@@ -21,6 +22,7 @@ contextBridge.exposeInMainWorld('instantSearch', {
   query: (text: string): Promise<BarResults> => ipcRenderer.invoke(SEARCH_QUERY, text),
   openSettings: (section: string) => ipcRenderer.send(SEARCH_OPEN_SETTINGS, section),
   openManager: () => ipcRenderer.send(SEARCH_OPEN_MANAGER),
+  syncNow: () => ipcRenderer.send(SEARCH_SYNC_NOW),
   onHistoryChanged: (callback: () => void) => {
     ipcRenderer.on(SEARCH_HISTORY_CHANGED, () => callback())
   },

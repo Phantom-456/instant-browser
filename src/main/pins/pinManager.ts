@@ -11,6 +11,9 @@ import { statSync } from 'node:fs'
 import { gradientCss } from '../../shared/pins/gradient'
 import type { ManagerAction, ManagerRow, ManagerView } from '../../shared/ipc'
 import { PinStore } from './pinStore'
+import { freeSpot } from '../../shared/pins/geometry'
+import type { ApplyPlan } from '../../shared/sync/apply'
+import { fromSyncPin } from '../../shared/sync/portable'
 import { PinSurface } from './pinSurface'
 import type { PinWindow, PinOut } from './pinWindows'
 
@@ -105,12 +108,12 @@ export class PinManager {
     try { bytes = p.snapshotAt !== null ? statSync(this.deps.store.snapshotPath(p.id)).size : 0 } catch { bytes = 0 }
     return {
       id: p.id, icon: p.icon, label: labelOf(p), customLabel: p.label ?? '', url: p.url, state: p.state, archived: p.archived, archivedAt: p.archivedAt,
-      following: p.following, gradient: gradientCss(p.gradient), createdAt: p.createdAt, lastUsedAt: p.lastUsedAt, snapshotAt: p.snapshotAt,
+      following: p.following, syncOff: p.syncOff === true, gradient: gradientCss(p.gradient), createdAt: p.createdAt, lastUsedAt: p.lastUsedAt, snapshotAt: p.snapshotAt,
       pictureBytes: bytes, scrollY: p.scroll ? Math.round(p.scroll.y) : null
     }
   }
 
-  managerView(): ManagerView {
+  managerView(): Omit<ManagerView, 'bookmarks' | 'devices' | 'history' | 'browserMarks' | 'tabs'> {
     const all = this.deps.store.all()
     return {
       pins: activePins(all).map((p) => this.row(p)),
@@ -129,6 +132,10 @@ export class PinManager {
       case 'archive': return this.act(action.id, 'remove')
       case 'follow': return void (await this.onPinEvent(action.id, { type: 'follow' }))
       case 'rename': return void (await this.onPinEvent(action.id, { type: 'rename', text: String(action.text ?? '').slice(0, 400) }))
+      case 'pin-local': this.deps.store.update(action.id, (p) => ({ ...p, syncOff: action.off === true })); return
+      case 'history-delete': return
+      case 'bookmark-edit': return
+      case 'bookmark-local': return // handled by the manager window (bookmarks are not pins)
       case 'put-back': return this.putBack(action.id)
       case 'delete': return this.deleteForever(action.id)
       case 'show-window': this.deps.minis.showWindow(action.windowId); return
@@ -154,6 +161,7 @@ export class PinManager {
     const record = this.deps.store.get(id)
     if (!record || !record.archived) return // only archived pins can be deleted for good
     this.deps.store.delete(id)
+    this.onDeletedForever?.(id)
   }
 
   /** What the automatic rules need to know about each pin that has a live page. */
@@ -452,6 +460,57 @@ export class PinManager {
     if (this.hoverTimer) clearInterval(this.hoverTimer)
     for (const { pin } of this.live.values()) pin.destroy()
     this.live.clear()
+  }
+
+  /** Called when a pin is deleted for good on this computer (sync tells the other computers). */
+  onDeletedForever: ((id: string) => void) | null = null
+
+  /** Every saved pin, archived or not (for sync). */
+  records(): PinRecord[] { return this.deps.store.all() }
+
+  /**
+   * Make this computer match what sync found. A pin from another computer arrives released, placed by this computer, and
+   * never opens a window by itself. Positions are never changed by sync. Returns what was done.
+   */
+  applySync(plan: ApplyPlan): { added: number; updated: number; removed: number; skipped: number } {
+    const result = { added: 0, updated: 0, removed: 0, skipped: 0 }
+    const { store, settings } = this.deps
+    const area = screen.getPrimaryDisplay().workArea
+    const d = this.diameter()
+    for (const sp of plan.add) {
+      if (store.get(sp.id)) continue
+      if (!sp.archived && this.pins().length >= settings.get().maxPins) { result.skipped++; continue } // the pin limit is the person's own
+      const want = { x: area.x + area.width - 40, y: area.y + 90 }
+      const centre = freeSpot(want, this.pins().map((p) => p.pin), d, area)
+      const record = fromSyncPin(sp, centre, Date.now())
+      store.put(record)
+      if (!record.archived) {
+        const surface = this.makePinWindow(record, centre)
+        this.live.set(record.id, { mini: null, pin: surface })
+        surface.show()
+      }
+      result.added++
+    }
+    for (const sp of plan.update) {
+      const record = store.get(sp.id)
+      if (!record) continue
+      const next = store.update(sp.id, (p) => ({ ...p, url: sp.url, title: sp.title, label: sp.label }))
+      if (sp.archived && !record.archived) this.remove(sp.id)
+      else if (!sp.archived && record.archived) this.putBack(sp.id)
+      else if (next) this.live.get(sp.id)?.pin.update(next)
+      result.updated++
+    }
+    for (const id of plan.remove) {
+      const live = this.live.get(id)
+      if (live) {
+        live.pin.destroy()
+        if (live.mini) this.deps.minis.discard(live.mini)
+        this.live.delete(id)
+      }
+      store.delete(id)
+      result.removed++
+    }
+    return result
   }
 
   /** Archived (removed) pins. The Alpha 03 manager will list them. */

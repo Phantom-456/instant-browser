@@ -37,7 +37,7 @@ async function detectWindows(): Promise<BrowserInfo[]> {
       continue // this root does not exist
     }
     for (const name of names) {
-      if (found.has(name) || /instant browser/i.test(name)) continue
+      if (found.has(name) || /talaria|quickpeek|instant browser/i.test(name)) continue
       try {
         const out = (await run('reg', ['query', `${root}\\${name}\\shell\\open\\command`, '/ve'])).stdout
         const path = exePathFromCommand(parseRegDefaultValue(out) ?? '')

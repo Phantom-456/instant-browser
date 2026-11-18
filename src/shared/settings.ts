@@ -15,7 +15,7 @@ export interface Settings {
   askDownloadLocation: boolean
   downloadFolder: string | null
   showSuggestions: boolean
-  /** Link router: while Instant Browser is the default browser, links go to the main browser unless keys are held. */
+  /** Link router: while Talaria is the default browser, links go to the main browser unless keys are held. */
   linkRouter: boolean
   /** Id of a preset in LINK_KEY_PRESETS. */
   linkRouterKeys: string
@@ -27,6 +27,18 @@ export interface Settings {
   showHistory: boolean
   /** Browsers (by name) whose history is not read. */
   historyOff: string[]
+  /** Show the bookmarks of your other browsers (read from their bookmark files), merged by address. */
+  otherBookmarks: boolean
+  /** Browsers (by name) whose bookmarks are not read. */
+  bookmarksOff: string[]
+  /** Keep a copy of the merged bookmarks in Talaria's own folder. The browsers' files are never changed. */
+  keepCopy: boolean
+  /** Look at the browsers' files while Talaria runs and update when they change. */
+  watchBrowsers: boolean
+  /** List the open tabs of your browsers. macOS asks for permission once for each browser. Off until you turn it on. */
+  liveTabs: boolean
+  /** Browsers (by name) whose tabs are not listed. */
+  liveTabsOff: string[]
   /** Keep a hidden window ready, so the next one opens at once. Uses about 40 MB more memory while ready. */
   warmWindow: boolean
   /** Links that come from a terminal or a code editor open in a small window, with no keys needed. */
@@ -45,6 +57,16 @@ export interface Settings {
   autoOffloadMemoryGB: number
   /** When memory is over the limit, ask before offloading (on), or offload without asking (off). */
   memoryAsk: boolean
+  /** Sync switches. Each kind of data has its own. These belong to this computer and are not synced. */
+  syncBookmarks: boolean
+  syncHistory: boolean
+  syncOpenPages: boolean
+  /** The name this computer shows to your other computers. Empty means a default name. */
+  deviceName: string
+  /** Ask for Touch ID before this computer syncs (Mac). */
+  syncTouchId: boolean
+  /** Sites whose history is never synced (a host such as example.com also covers its subdomains). */
+  syncHistoryExcluded: string[]
 }
 
 /** The pin sizes the user can choose: three smaller and three larger than the default (28). */
@@ -86,6 +108,12 @@ export const DEFAULT_SETTINGS: Settings = {
   diaProfiles: [],
   showHistory: true,
   historyOff: [],
+  otherBookmarks: true,
+  bookmarksOff: [],
+  keepCopy: true,
+  watchBrowsers: true,
+  liveTabs: false, // off by default: turning it on makes macOS ask for permission, and an update can make it ask again
+  liveTabsOff: [],
   warmWindow: true,
   terminalLinksSmallWindow: true,
   pinArmMs: 2000,
@@ -95,7 +123,13 @@ export const DEFAULT_SETTINGS: Settings = {
   autoOffloadMinutes: 30,
   autoOffloadMemory: false,
   autoOffloadMemoryGB: 1.5,
-  memoryAsk: true
+  memoryAsk: true,
+  syncBookmarks: true,
+  syncHistory: false,
+  syncOpenPages: false,
+  deviceName: '',
+  syncTouchId: false,
+  syncHistoryExcluded: []
 }
 
 export const SEARCH_ENGINES: ReadonlyArray<{ name: string; template: string }> = [
@@ -105,6 +139,7 @@ export const SEARCH_ENGINES: ReadonlyArray<{ name: string; template: string }> =
   { name: 'Brave', template: 'https://search.brave.com/search?q=%s' }
 ]
 
+const names = (v: unknown): string[] => (Array.isArray(v) ? v.filter((n): n is string => typeof n === 'string' && n !== '').slice(0, 50) : [])
 const bool = (value: unknown, fallback: boolean) => (typeof value === 'boolean' ? value : fallback)
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
@@ -149,6 +184,12 @@ export function mergeSettings(raw: unknown): Settings {
       ? r.diaProfiles.filter((n): n is string => typeof n === 'string' && n !== '').slice(0, 100)
       : d.diaProfiles,
     showHistory: bool(r.showHistory, d.showHistory),
+    otherBookmarks: bool(r.otherBookmarks, d.otherBookmarks),
+    keepCopy: bool(r.keepCopy, d.keepCopy),
+    watchBrowsers: bool(r.watchBrowsers, d.watchBrowsers),
+    liveTabs: bool(r.liveTabs, d.liveTabs),
+    bookmarksOff: names(r.bookmarksOff),
+    liveTabsOff: names(r.liveTabsOff),
     warmWindow: bool(r.warmWindow, d.warmWindow),
     terminalLinksSmallWindow: bool(r.terminalLinksSmallWindow, d.terminalLinksSmallWindow),
     pinArmMs: clampNumber(r.pinArmMs, d.pinArmMs, PIN_LIMITS.armMs.min, PIN_LIMITS.armMs.max),
@@ -158,6 +199,12 @@ export function mergeSettings(raw: unknown): Settings {
     autoOffloadMinutes: clampNumber(r.autoOffloadMinutes, d.autoOffloadMinutes, PIN_LIMITS.minutes.min, PIN_LIMITS.minutes.max),
     autoOffloadMemory: bool(r.autoOffloadMemory, d.autoOffloadMemory),
     memoryAsk: bool(r.memoryAsk, d.memoryAsk),
+    syncBookmarks: bool(r.syncBookmarks, d.syncBookmarks),
+    syncHistory: bool(r.syncHistory, d.syncHistory),
+    syncOpenPages: bool(r.syncOpenPages, d.syncOpenPages),
+    syncTouchId: bool(r.syncTouchId, d.syncTouchId),
+    syncHistoryExcluded: Array.isArray(r.syncHistoryExcluded) ? [...new Set(r.syncHistoryExcluded.filter((h): h is string => typeof h === 'string').map((h) => h.trim().toLowerCase().replace(/^www\./, '')).filter((h) => /^[a-z0-9.-]{1,253}$/.test(h)))].slice(0, 200) : d.syncHistoryExcluded,
+    deviceName: typeof r.deviceName === 'string' ? r.deviceName.replace(/\s+/g, ' ').trim().slice(0, 40) : d.deviceName,
     autoOffloadMemoryGB:
       typeof r.autoOffloadMemoryGB === 'number' && Number.isFinite(r.autoOffloadMemoryGB)
         ? Math.min(Math.max(Math.round(r.autoOffloadMemoryGB * 10) / 10, PIN_LIMITS.memoryGB.min), PIN_LIMITS.memoryGB.max)
@@ -170,4 +217,4 @@ export function mergeSettings(raw: unknown): Settings {
  * Settings that belong to one computer. A future sync between computers must not copy these:
  * a hotkey that works on the Mac may be taken by another app on the Windows PC.
  */
-export const DEVICE_ONLY_SETTINGS: ReadonlyArray<keyof Settings> = ['hotkey']
+export const DEVICE_ONLY_SETTINGS: ReadonlyArray<keyof Settings> = ['hotkey', 'otherBookmarks', 'bookmarksOff', 'keepCopy', 'watchBrowsers', 'liveTabs', 'liveTabsOff', 'syncBookmarks', 'syncHistory', 'syncOpenPages', 'deviceName', 'syncTouchId', 'syncHistoryExcluded']

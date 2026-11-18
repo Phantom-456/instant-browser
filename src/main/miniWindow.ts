@@ -68,6 +68,11 @@ export interface MiniWindowDeps {
   onOpenSettings: () => void
   /** The Collapse button was pressed. The window is not hidden yet: the pin manager decides. */
   onCollapse?: (handle: MiniHandle, info: MiniInfo) => void
+  /** The star was pressed: bookmark the page, or remove its bookmark. */
+  onBookmark?: (url: string, title: string) => void
+  isBookmarked?: (url: string) => boolean
+  /** A window was opened or closed (sync shares the list of open pages). */
+  onWindowsChanged?: () => void
 }
 
 /** What the pin manager needs to know about a window. */
@@ -355,6 +360,7 @@ export class MiniWindowManager {
       this.deps.settings.update({ windowSize: { width, height } })
     })
     win.on('closed', () => {
+      this.deps.onWindowsChanged?.()
       this.byToolbarId.delete(toolbarId)
       if (this.spare === mini) this.spare = null
       local?.grant.revoke()
@@ -441,6 +447,7 @@ export class MiniWindowManager {
     if (wc.isLoading()) wc.stop() // the empty page of a spare that is still starting must not win over the real address
     void wc.loadURL(url).catch(() => {}) // a refused or stopped load is shown by the error strip
     mini.win.show()
+    this.deps.onWindowsChanged?.()
     perf('mini window: shown')
     wc.once('did-start-loading', () => perf('page: starts loading'))
     wc.once('did-stop-loading', () => perf('page: finished loading'))
@@ -479,6 +486,11 @@ export class MiniWindowManager {
     // "visible on all workspaces" is what makes a window follow the user between desktops.
     // visibleOnFullScreen only lets the window sit on top of a full-screen app on the desktop it was opened on.
     mini.win.setVisibleOnAllWorkspaces(mini.following, { visibleOnFullScreen: true })
+  }
+
+  /** The bookmarks changed (here or by sync): every toolbar shows the right star. */
+  refreshBookmarks(): void {
+    for (const mini of this.byToolbarId.values()) if (!mini.win.isDestroyed() && mini !== this.spare) this.pushState(mini)
   }
 
   // ---- Used by the pin manager ----
@@ -755,10 +767,11 @@ export class MiniWindowManager {
       canGoBack: wc.navigationHistory.canGoBack(),
       canGoForward: wc.navigationHistory.canGoForward(),
       following: mini.following,
+      bookmarked: this.deps.isBookmarked?.(currentUrl(mini)) ?? false,
       loading: wc.isLoading() || mini.starting,
       error: mini.error
     }
-    mini.win.setTitle(state.title || 'Instant Browser')
+    mini.win.setTitle(state.title || 'Talaria')
     mini.toolbar.webContents.send(TOOLBAR_STATE, state)
   }
 
@@ -786,6 +799,9 @@ export class MiniWindowManager {
       }
       case 'collapse':
         if (isAllowedUrl(currentUrl(mini))) this.deps.onCollapse?.(mini, this.infoOf(mini))
+        break
+      case 'bookmark':
+        if (isAllowedUrl(currentUrl(mini))) { this.deps.onBookmark?.(currentUrl(mini), wc.getTitle()); this.pushState(mini) }
         break
       case 'follow':
         mini.following = !mini.following

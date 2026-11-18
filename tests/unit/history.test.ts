@@ -82,14 +82,14 @@ test('merging adds new entries and combines the same ones', () => {
     visit({ url: 'https://a.example/', title: 'A', visits: 1, source: 'Dia', lastVisit: NOW - 2 * DAY })
   ])
   const b = buildHistory([
-    visit({ url: 'https://www.google.com/search?q=cats', visits: 1, source: 'Instant Browser', lastVisit: NOW }),
-    visit({ url: 'https://www.google.com/search?q=dogs', visits: 1, source: 'Instant Browser', lastVisit: NOW }),
-    visit({ url: 'https://a.example/', title: '', visits: 1, source: 'Instant Browser', lastVisit: NOW })
+    visit({ url: 'https://www.google.com/search?q=cats', visits: 1, source: 'Talaria', lastVisit: NOW }),
+    visit({ url: 'https://www.google.com/search?q=dogs', visits: 1, source: 'Talaria', lastVisit: NOW }),
+    visit({ url: 'https://a.example/', title: '', visits: 1, source: 'Talaria', lastVisit: NOW })
   ])
   const m = mergeHistory(a, b)
   const cats = m.searches.find((s) => s.term === 'cats')!
   expect(cats).toMatchObject({ visits: 3, lastVisit: NOW })
-  expect(cats.sources.sort()).toEqual(['Dia', 'Instant Browser'])
+  expect(cats.sources.sort()).toEqual(['Dia', 'Talaria'])
   expect(m.searches.map((s) => s.term).sort()).toEqual(['cats', 'dogs'])
   expect(m.pages[0]).toMatchObject({ title: 'A', visits: 2 }) // an empty title does not replace a real one
   expect(a.searches).toHaveLength(1) // the inputs are not changed
