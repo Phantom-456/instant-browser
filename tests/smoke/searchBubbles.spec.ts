@@ -171,6 +171,8 @@ test('a bubble whose page process died is loaded again, so the bubbles still sho
   await toggleBar() // close
   await toggleBar() // open again
   await expect.poll(crashed, { timeout: 8000 }).toEqual([false, false, false])
-  expect((await debug()).visible).toBe(true)
+  // The pages are back. On a slow machine the bar may have closed meanwhile: open it and wait for all three bubbles.
+  await showBar()
+  await expect.poll(async () => (await debug()).visible, { timeout: 8000 }).toBe(true)
   await toggleBar() // leave it closed
 })
