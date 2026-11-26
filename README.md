@@ -1,0 +1,252 @@
+# Talaria (QuickPeek)
+
+Talaria (QuickPeek) is a small background app for Mac (a Windows package is in progress). You press a hotkey, type a search, and a small one-tab browser window opens on top of the app you are working in. You can close it, or send the page to any browser you have installed.
+
+## Two packages
+
+The app comes as two separate codebases in one repository. Each has its own README, build, check and release:
+
+| Package | Folder | State |
+|---|---|---|
+| **macOS** | the root of this repository ([notes](packages/mac/README.md)) | Tested. Release tags `v...`. Auto-update (when signed). |
+| **Windows** | [packages/windows](packages/windows/README.md) | Early, not validated. Release tags `win-v...`, always pre-releases. |
+
+They share **no code**. The Windows codebase is a full copy in `packages/windows` with its own sources, tests, lock file and build settings, so work on Windows never touches the Mac app. A fix that both need is copied by hand. The GitHub checks are separate too (`check-mac.yml` and `check-windows.yml`), and each starts only when its own code changes.
+
+## Install
+
+Download it from the project page: **https://phantom-456.github.io/instant-browser/** (Mac and Windows). The files are in GitHub Releases. The app updates itself.
+
+## Local files
+
+Paste an absolute HTML or Markdown path into the search bar or a window's address field. `~/` paths, quoted paths, and `file://` URLs are supported. Each open asks permission to read the file's containing folder until that window closes. Cancel grants nothing; reopening asks again. Local paths are excluded from web searches, online suggestions, and web history.
+
+HTML can run sandboxed scripts and use supporting files within the approved folder. Markdown is rendered with unsafe embedded HTML removed and scripts disabled. Files outside the folder, including symlinks pointing outside, are blocked. Open another file's path explicitly for a separate permission prompt. Pages using application-server routes still need their server for complete styling and navigation.
+
+Added in 0.2.1. See the [changelog](CHANGELOG.md).
+
+## Run it from the code
+
+```bash
+pnpm install
+pnpm dev
+```
+
+If Electron does not start after install, run `node node_modules/electron/install.js` once.
+
+## Test it
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm smoke
+pnpm check:version
+```
+
+## Build the apps
+
+```bash
+pnpm dist:mac   # the Mac app (see packages/mac)
+cd packages/windows && pnpm install && pnpm dist:win   # the Windows app folder (see packages/windows)
+```
+
+The app is `dist.noindex/mac-arm64/Talaria.app`. It is not signed. The first start may need right-click, Open. It has no Dock icon; look for the icon in the menu bar. It lists itself as a web browser in System Settings, but it never changes your default browser by itself.
+
+## Versions and releases
+
+The Mac app uses [Semantic Versioning](https://semver.org): `MAJOR.MINOR.PATCH`. A fix bumps PATCH (0.3.0 to 0.3.1), new features bump MINOR (0.3.0 to 0.4.0). The version is set in one place, `package.json`; the app reads it from there (menu bar, Settings, updates). Every version has a section in [CHANGELOG.md](CHANGELOG.md).
+
+To release:
+
+1. While you work, add what changed under `## [Unreleased]` in CHANGELOG.md.
+2. Run `pnpm release:prepare patch` (or `minor`, `major`, or an exact `0.4.0-rc.1`). It sets the version in `package.json` and moves the Unreleased notes into a new `## [x.y.z] - YYYY-MM-DD` section.
+3. `pnpm release:prepare` runs `pnpm check:version` for you. The Mac check on GitHub runs it too and fails when package.json and CHANGELOG.md disagree.
+4. Merge, then push the tag `vx.y.z` on the merged commit. The release workflow checks that the tag equals package.json, that the commit is on `main`, and that the number is higher than every release before it, before it builds anything.
+
+The release is first uploaded as a draft. It becomes public only when `latest-mac.yml` (what the updater reads) and the four installers all carry the version, so a broken build is never offered as an update.
+
+A tag with a dash (`v0.4.0-rc.1`) is published as a pre-release, so it is never offered as an update to everyone.
+
+**Skipping a bad version.** A version number is never reused. If a version turns out to be bad:
+
+1. Mark its GitHub release as a pre-release (or delete it), so the website and the updater stop offering it.
+2. Run `pnpm release:yank 0.3.1 --reason "what is wrong"`. It adds `[YANKED]` to the heading in CHANGELOG.md (`## [0.3.1] - 2026-12-01 [YANKED]`) and a reason line, and prints the `gh release edit` command for step 1.
+3. Release the fix as the next number (0.3.2). The check refuses to release a yanked number again.
+
+On a single Mac you can also skip an update without any of that: Settings, About (or the menu bar icon), **Skip this version**. That version is never downloaded or installed, and the next one is offered as usual. **Allow again** undoes it.
+
+The Windows package has its own version in `packages/windows/package.json` and its own `win-v...` tags.
+
+## Look
+
+The windows use macOS glass (vibrancy), soft round shapes and calm animations. Light and dark follow the system: dark is clear glass, and light is frosted lavender paper with solid white cards. One pink-violet-blue accent is used everywhere and it stops moving when the Mac is set to reduce motion. The address bar is a label until you hover or click it. Icons are from Phosphor (MIT licence). The app icon is made from `build/icon.png`.
+
+## Use it
+
+- Hotkey: **Control+Option+Space** opens the search bar. Esc closes it. Enter opens a mini window.
+- Type a web address, or words to search. Your search engine's suggestions show under the field (Google, DuckDuckGo and Bing). You can turn them off in Settings; they send what you type to the search engine.
+- Google may sometimes ask "are you a robot?". Solve it once; the answer is kept. The app does not hide that it is Electron. If it keeps coming, choose another search engine in Settings.
+- In a mini window:
+
+| Keys | Action |
+|---|---|
+| Cmd+L | Go to the address field |
+| Cmd+W | Close |
+| Cmd+R | Reload |
+| Cmd+[ and Cmd+] | Back and forward |
+| Cmd+Shift+M | Send the page to your main browser and close |
+| Cmd+Shift+O | Choose a browser to send to |
+
+- Windows stay above other apps (Settings > Appearance). The pin button collapses a window to a pin (see Pins below).
+- A window stays on the desktop where you opened it. The follow button (two squares, Mac only for now) makes that window follow you to other desktops.
+- Sending moves only the address. Text you typed in a page and did not send is lost.
+
+## Pins
+
+The pin button in the toolbar collapses the window. The whole window shrinks into a small pin on the desktop, where the button was. The page stays alive behind the pin.
+
+- **Hold the pointer on a pin for 2 seconds.** It opens as a capsule with the page name and address, and the gradient border draws itself around it while it arms. Until then, clicks go through to the app behind it. When it is ready, click the pin to open the window again, where it was.
+- **Follow** (right of the pin) makes the pin and its window follow you to every desktop.
+- **Offload** (below): drag the small bubble toward the pin. The page is saved as a picture and released from memory. The pin goes dormant (a faint disc with a dot at rest, a border only when you point at it). Click the pin and the window grows back with the saved picture, then the live page loads and the scroll position comes back. A click on the Offload bubble pauses its countdown, a right-click goes on.
+- **Remove** (above) takes the pin away and keeps it in an archive.
+- Click the name to rename it (up to 60 characters). Drag the pin to move it.
+- Pins come back after a restart as released pins.
+- **Automatic Offload** is off until you turn it on in Settings > Pins: by time without use, or when the app uses more memory than a limit you choose (the oldest pins go first; paused pins stay).
+
+**Memory, honestly:** a pin whose page is alive has a small window of its own that costs about 20 MB (the macOS memory figure, measured). Offload frees the page behind the pin (about 190 MB for a heavy test page). A pin whose page is released has no page process at all while you leave it alone: it is a bare round window. It looks different at rest (a faint disc with a dot) and turns into the full pin when you point at it. The most pins at once is 12 by default (4 to 40 in Settings). The menu bar icon has a Pins list with Open, Offload and Remove for each pin.
+
+## Manage (the Pin Manager)
+
+Open it from the menu bar icon (Manage), from the round bubble to the right of the search bar, or with Cmd+Shift+P while the search bar is open. It is one window with a search box and a tab bar:
+
+- **Search** filters every list at once (Cmd+F or `/` jumps to it).
+- **Tabs** (All, Pins, Windows, Bookmarks, History, Browsers, Archive, and Other computers when sync shows some) with a count on each.
+- **Keyboard:** Up and Down walk through the rows, Right and Left open and close a bookmark folder, Enter presses the main button.
+- Each row has one main button. The other buttons slide in when you point at the row or focus it.
+- **Pins**: name, address, colours, and whether the page is in memory or released. Open, Rename (double-click the name), Offload, Follow, Keep here, Details and Remove.
+- **Open windows**: Show or Close. An open window is not a pin.
+- **Bookmarks**: yours. Open, Edit, Keep here (this computer only) and Remove. Remove can be undone for a few seconds.
+- **History**: from Talaria and your other browsers, with the browser and the kind of site. You can delete what was opened in Talaria (with Undo).
+- **Browsers**: the bookmarks of your other browsers (see Your browsers below) and, if you turned it on, their open tabs.
+- **Archive**: pins you removed. **Put back** shows the pin again (released). **Delete for good** asks first and cannot be undone.
+
+macOS does not tell apps the names or numbers of your desktops, so pins are listed in one place. A pin whose desktop is gone is still listed and opens from here.
+
+The round **Settings** bubble beside the search bar opens a menu of settings sections when you hover it (Cmd+, does the same from the keyboard).
+
+## Google Drive sync (optional)
+
+Settings, Sync, **Connect Google Drive**. Your normal browser opens Google's page; you sign in and allow one permission: the app data folder of your Drive (`drive.appdata`). That is one hidden folder only this app can see. The app cannot see the rest of your Drive.
+
+- **Locked on your computer first.** You choose a passphrase once. The synced file is encrypted (AES-256-GCM) before it is uploaded, so Google only holds scrambled data. Type the same passphrase once on each other computer. If you forget it and have no other unlocked computer, the synced data cannot be recovered (you delete the file and start again).
+- **Synced:** your pins (address, title, the name you gave, archived or not), your **bookmarks** (one list for your whole account; the star in the window toolbar), a short list of settings, and, with their own switches, **history** you made in this app and the **pages open on each computer** (shown in the Pin Manager with "Open here"). Pins from another computer arrive released and never open a window by themselves.
+- **Never synced:** passwords, cookies, logged-in sessions, site data, saved pictures of released pages, where windows and pins sit on screen, and the history of your other browsers.
+- **Sync now:** Settings, Sync, or the first item in the menu of the Settings bubble beside the search bar, or Cmd+Shift+S in the search field, or the menu bar icon. It also syncs when you quit the app (at most 4 seconds) and before the computer sleeps, and again after it wakes.
+- It syncs a few seconds after a change, every 10 minutes, and at start. Offline is fine: it tries again later. When two computers change the same pin, the newest change wins. A pin deleted for good on one computer is deleted on the others.
+- **Disconnect** stops syncing on this computer. **Disconnect and delete synced data** also deletes the file from your Drive. You can also remove the permission at myaccount.google.com/permissions.
+- Builds made without a Google login key (for example from the public code) show "This build cannot connect to Google Drive." To make your own, create a Google Cloud desktop client and put `MAIN_VITE_GOOGLE_CLIENT_ID` and `MAIN_VITE_GOOGLE_CLIENT_SECRET` in a file named `.env.local` (never commit it).
+- The privacy policy is on the download page (privacy.html).
+
+## Your browsers (Settings, Your browsers)
+
+Every option has its own switch. Talaria only reads: it never changes a browser, and it never reads cookies or passwords.
+
+- **Bookmarks from your other browsers.** It reads the bookmark files of Chrome, Edge, Brave, Arc, Dia, Vivaldi and Firefox. One address is one entry, whichever browsers have it, in the folders they already use. They show in Manage (Browsers tab) and in the search bar. Safari is not read (its file needs Full Disk Access).
+- **Keep a copy.** The merged list is saved in Talaria's own folder (`browsers/bookmarks-merged.json`), so it is there at once at start, and it stays when a browser is closed or its file is locked.
+- **Watch the browsers' files.** When a browser changes its bookmarks or history, Talaria reads the file again a few seconds later. Turn it off to update only when the search bar opens and every few minutes.
+- **History from your browsers**, with a switch for each browser.
+- **List open tabs** (Mac only, **off by default**). It asks macOS for permission to control each browser, once for each. Only the address and title of each tab are read, and a closed browser is never started. Browsers do not say when a tab was made, so the list shows "first seen", the time Talaria first noticed it. It is off by default because an update can make macOS ask for the permission again.
+
+## Search bar history
+
+Press the hotkey with nothing typed and the bar shows bubbles: quick Settings links and your recent searches, then recently visited pages. When you type, it shows matching history first, then your search engine's suggestions, and Settings bubbles that match.
+
+The history comes from the history files of Dia, Arc, Google Chrome, Edge, Brave, Firefox and Zen on this computer, plus what you opened from the bar. Search words are read from the addresses of search pages (Google, DuckDuckGo, Bing, Brave, Yahoo, Ecosia).
+
+- A separate process reads the history files, so the app never freezes. Each file is copied to a temporary file, read, and the copy is deleted.
+- The bar shows old data first, then updates itself when newer data is ready. A file is read again only when it changed (its size or time is different), and the bar looks at that at most every 5 minutes.
+- To show old data at once after a restart, a small **saved copy** is kept in the app's data folder (`history-cache.json`). It holds the addresses, titles and times of up to about 1,500 recent rows per browser file. It is readable only by your user, stays on this computer and is never sent anywhere. Turning history off, or "Clear what Instant Browser remembers" in Settings, deletes it.
+- Only history is read. **Cookies, passwords and saved cards are never read.**
+- You can turn history off, or leave out single browsers, in Settings > Your browsers. Safari is not read.
+- If macOS blocks a browser's folder (Chrome may), that browser is skipped.
+
+## Agents (MCP)
+
+Talaria has a built-in MCP server, off by default (Settings > Agents). Agents that run on your Mac, such as Claude Code and Codex, can read your bookmarks, history, pins and open windows, using your own subscription. It listens on this computer only and needs a key. See [docs/mcp.md](docs/mcp.md).
+
+## Speed and memory
+
+- **Ready window:** the app keeps one hidden window ready, so the next small window opens at once. It uses about 40 MB of memory while it waits, and it is let go after 10 minutes without use. Turn it off in Settings > General > "Keep a window ready".
+- The window shows the address and a loader (in the address bar) the moment you press Enter, before the page answers.
+- The connection to your search engine is opened in advance.
+- Memory use measured on a Mac (Apple silicon), all processes together: about 335 MB at rest, and about 180 to 210 MB for each open small window.
+
+## Dia profiles
+
+In Settings > General you can choose which Dia profile "send to browser" opens pages in. The three dots button also lists the profiles. This uses Dia's own AppleScript interface and reads only profile names. macOS asks once to let Instant Browser control Dia. When Dia is not running, or the profile is gone, the page opens in Dia normally.
+
+## Link router
+
+If you make Instant Browser your default browser, every link you click in another app (Teams, Slack, mail) reaches it first. It then sends the link to your main browser as a new tab, unless you hold **Option+Command** while you click: then the link opens in a small window. You can change the keys, or turn the router off, in Settings. It works only while Instant Browser is the default browser. Links that come from a terminal or a code editor (for example from `gh auth login`) open in a small window with no keys needed; you can turn that off in Settings. In Settings, General, "Default browser" shows which app macOS sends links to now, and a "Make default" button asks macOS to switch; macOS asks you to confirm, and nothing changes until you do. The app never changes your default by itself.
+
+## Settings
+
+Open **Settings** from the menu bar icon, or press Cmd+, in a mini window. Changes apply at once. To change the hotkey, click **Change**, then press the new keys (for example Command+Option+B). The hotkey is saved on this computer only and is never synced.
+
+The values are saved in a file you can also edit by hand when the app is closed:
+
+`~/Library/Application Support/instant-browser/settings.json`
+
+| Key | Meaning |
+|---|---|
+| `hotkey` | Key to open the search bar, for example `Control+Alt+Space` |
+| `searchTemplate` | Search address with `%s` where the words go |
+| `mainBrowserId` | Browser used by "send" (Mac bundle id, for example `company.thebrowser.dia`) |
+| `alwaysOnTop` | New windows stay on top |
+| `windowSize` | Size of new windows (it follows the last resize) |
+| `launchAtLogin` | Start the app when you log in |
+| `defaultZoom` | Page zoom, 0.5 to 3 |
+| `httpsFirst` | Try https before http |
+| `sendGpc` | Send the Global Privacy Control signal |
+| `updateNotice` | Tell me when the browser engine is out of date |
+| `askDownloadLocation` | Ask where to save each download |
+| `downloadFolder` | Folder for downloads when not asking |
+| `otherBookmarks` | Show the bookmarks of your other browsers |
+| `bookmarksOff` | Browsers whose bookmarks are not read |
+| `keepCopy` | Keep a copy of the merged bookmarks in Talaria's folder |
+| `watchBrowsers` | Read a browser's files again when it changes them |
+| `liveTabs` | List the open tabs of your browsers (Mac; off by default) |
+| `liveTabsOff` | Browsers whose tabs are not listed |
+
+## Security compared to Google Chrome
+
+The engine is the same Chromium, so most of the protection is the same. Some of Chrome's protection is a Google service and does not come with Electron.
+
+| Protection | Chrome | Instant Browser |
+|---|---|---|
+| Sandbox for web pages | Yes | Yes (`sandbox: true` on every page) |
+| Site isolation (each site in its own process) | Yes | Yes (Chromium default, kept on) |
+| HTTPS certificate checks, no "continue anyway" | Yes (with a bypass) | Yes, stricter: no bypass |
+| HTTPS first (try `https` before `http`) | Yes | Yes, built by us |
+| Permission prompts (camera, microphone, location, notifications) | Yes | Yes, built by us, remembered per site |
+| Downloads never open by themselves | Yes | Yes |
+| Clear browsing data | Yes | Yes (in Settings) |
+| Cookies encrypted on disk | Yes | Yes (Electron fuse `enableCookieEncryption`) |
+| App cannot be started as a plain Node program | n/a | Yes (Electron fuses) |
+| Security fixes | Automatic, within days | **Weaker.** Fixes arrive when the app is rebuilt on a new Electron. The app checks and tells you when a newer Electron exists. |
+| Google Safe Browsing (warns about phishing and malware sites) | Yes | **No.** It is a Google service that is not part of Electron. |
+| Password leak check, Enhanced Protection | Yes | **No.** Google account services. |
+| Extension checks by the Chrome Web Store | Yes | **Partly.** Extension support in Electron is limited. |
+| Signed and notarised app | Yes | **No** in version 1. Needs a paid Apple and Windows signing identity. |
+
+**Rule:** for banking and other high-value sites, use "send to browser" and do it in Dia or Chrome. Instant Browser is for quick lookups and short forms.
+
+On the first start of the built app, macOS may ask once for Keychain access for "Instant Browser Safe Storage". That is expected. It protects the saved cookies.
+
+## Notes
+
+Electron must be kept on the latest stable version. That is how Chromium security fixes arrive.
+
+## Licence
+
+Instant Browser is open source under the **Apache License 2.0** (see [LICENSE](LICENSE)). You may use, change and share it, including in products you sell, as long as you keep the licence and notices. The licence includes a patent grant. The name "Instant Browser" and its icon are not part of the licence (see [NOTICE](NOTICE)). Third-party parts are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

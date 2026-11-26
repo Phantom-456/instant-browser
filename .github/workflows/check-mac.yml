@@ -1,0 +1,42 @@
+name: Mac check
+
+# The macOS package (the code at the root of the repository). It has its own check, so a Windows problem never turns this one red,
+# and a change that only touches packages/windows does not start it.
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['packages/windows/**', '.github/workflows/check-windows.yml', '.github/workflows/release-windows.yml']
+  pull_request:
+    paths-ignore: ['packages/windows/**', '.github/workflows/check-windows.yml', '.github/workflows/release-windows.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # to list the files a pull request changes
+      - uses: pnpm/action-setup@v6 # the version comes from "packageManager" in package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      # package.json and CHANGELOG.md must agree. On a pull request, also remind (a warning) when the app changes
+      # without a CHANGELOG.md line.
+      - name: Version check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ -n "$BASE_SHA" ]; then
+            git diff --name-only "$BASE_SHA"...HEAD > "$RUNNER_TEMP/changed.txt"
+            node scripts/check-version.mjs --changed "$RUNNER_TEMP/changed.txt"
+          else
+            node scripts/check-version.mjs
+          fi
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm smoke

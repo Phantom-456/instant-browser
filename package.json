@@ -1,0 +1,54 @@
+{
+  "name": "instant-browser",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Hotkey search bar that opens small floating one-tab browser windows.",
+  "main": "out/main/index.js",
+  "packageManager": "pnpm@10.34.9",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "check:version": "node scripts/check-version.mjs",
+    "release:prepare": "node scripts/bump-version.mjs",
+    "release:yank": "node scripts/yank-version.mjs",
+    "smoke": "pnpm build && playwright test",
+    "dist:mac": "pnpm build && electron-builder --config electron-builder.mac.yml --mac dir",
+    "dist:mac:local": "pnpm dist:mac && scripts/sign-local-mac.sh",
+    "dist:mac:release": "pnpm build && electron-builder --config electron-builder.mac.yml --mac --arm64 --x64 --publish never"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@phosphor-icons/core": "^2.1.1",
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^26.6.6",
+    "@types/sanitize-html": "^2.16.2",
+    "electron": "^45.3.4",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
+  },
+  "homepage": "https://phantom-456.github.io/instant-browser/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Phantom-456/instant-browser.git"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Talaria"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11",
+    "marked": "^18.2.1",
+    "sanitize-html": "^2.18.2",
+    "uiohook-napi": "1.5.5"
+  }
+}

@@ -1,0 +1,85 @@
+name: Release Mac
+
+# Push a tag like v0.3.0 to build the Mac installers and publish them in GitHub Releases.
+# The Mac app checks the same Releases for updates. The Windows package has its own tags (win-v...), see release-windows.yml.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+# One Mac release at a time; a second tag waits instead of racing the first.
+concurrency:
+  group: release-mac
+  cancel-in-progress: false
+
+jobs:
+  mac:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the whole history, to see that the tag is on main
+      # Only release what was merged: the tagged commit must be on main. Also refuse a tag older than an existing release tag.
+      - name: The tag is on main and newer than every other release tag
+        run: |
+          git fetch origin main --quiet
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME points at a commit that is not on main. Merge first, then tag the merged commit."
+            exit 1
+          fi
+          newest=$(git tag --list 'v[0-9]*' | grep -v -- '-' | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+          mine=${GITHUB_REF_NAME#v}; mine=${mine%%-*}
+          if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$mine" | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)" != "$mine" ]; then
+            echo "::error::$GITHUB_REF_NAME is older than the released v$newest. Version numbers only go up."
+            exit 1
+          fi
+      - uses: pnpm/action-setup@v6 # the version comes from "packageManager" in package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      # package.json, CHANGELOG.md and the tag must agree. The CHANGELOG.md section becomes the text of the GitHub release.
+      - run: node scripts/check-version.mjs --notes release-notes.md
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      # Signed and notarized when the Apple secrets exist (MAC_CERTIFICATE_P12_BASE64, MAC_CERTIFICATE_PASSWORD, APPLE_ID,
+      # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID).
+      # Without them the files are still built, but macOS will show a warning on first open.
+      - name: Build, sign, notarize and publish (Mac)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A version with a dash (0.2.0-rc.1) is published as a pre-release, so it never becomes "latest".
+          EP_PRE_RELEASE: ${{ contains(github.ref_name, '-') }}
+          # Upload to a DRAFT release. Nobody (and no updater) sees it until the build is verified below.
+          EP_DRAFT: 'true'
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          pnpm build
+          if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ]; then
+            echo "Apple secrets found: signing and notarizing."
+            pnpm exec electron-builder --config electron-builder.mac.yml --mac --arm64 --x64 --publish always -c.mac.notarize=true -c.releaseInfo.releaseNotesFile=release-notes.md
+          else
+            echo "::warning::No Apple secrets: building UNSIGNED Mac files."
+            CSC_IDENTITY_AUTO_DISCOVERY=false pnpm exec electron-builder --config electron-builder.mac.yml --mac --arm64 --x64 --publish always -c.releaseInfo.releaseNotesFile=release-notes.md
+          fi
+
+      # The draft becomes public only when latest-mac.yml and all four installers carry this version.
+      # If this fails, the release stays a draft: delete it on GitHub, fix, and tag the next version.
+      - name: Verify the build, then publish the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/verify-build.mjs dist.noindex
+          if [ "${{ contains(github.ref_name, '-') }}" = "true" ]; then
+            gh release edit "$GITHUB_REF_NAME" --draft=false --prerelease
+          else
+            gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          fi

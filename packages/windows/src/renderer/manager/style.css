@@ -1,0 +1,48 @@
+@import '../shared/glass.css';
+
+html, body { overflow: auto; background: transparent; height: 100%; }
+body { padding: 0 24px 32px; }
+header { position: sticky; top: 0; z-index: 2; padding: 46px 0 10px; -webkit-app-region: drag; background: linear-gradient(var(--surface, transparent) 70%, transparent); }
+h1 { margin: 0; font-size: 22px; font-weight: 650; }
+#summary { margin: 4px 0 0; color: var(--ink-soft); font-size: 12.5px; line-height: 1.45; max-width: 62ch; }
+h2 { margin: 26px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); }
+.empty { padding: 14px 4px; color: var(--ink-faint); font-size: 13px; }
+.note { margin: 6px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--hover); color: var(--ink-soft); font-size: 12.5px; line-height: 1.5; }
+
+.row { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 6px; border-radius: 14px; background: var(--field); border: 1px solid var(--edge); }
+.swatch { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4); }
+.swatch.released { background: transparent !important; border: 2.5px solid transparent; background-clip: padding-box; box-shadow: none; position: relative; }
+.swatch.released::before { content: ''; position: absolute; inset: -2.5px; border-radius: 50%; background: var(--g); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px)); }
+.text { min-width: 0; }
+.name { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.url { color: var(--ink-soft); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chips { margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { padding: 1px 8px; border-radius: 999px; font-size: 11px; background: var(--hover); color: var(--ink-soft); }
+.chip.live { background: var(--accent-soft); color: var(--accent); }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+button { height: 28px; padding: 0 12px; border: 1px solid var(--edge); border-radius: 999px; background: transparent; color: var(--ink); font: 500 12.5px/1 inherit; cursor: default; transition: background 160ms var(--ease); }
+button:hover { background: var(--hover); }
+button.primary { background: var(--accent); border-color: transparent; color: #fff; }
+button.danger { color: var(--danger); }
+button.on { background: var(--accent-soft); color: var(--accent); }
+.details { grid-column: 2 / 4; display: grid; grid-template-columns: max-content 1fr; gap: 3px 14px; font-size: 12px; color: var(--ink-soft); padding-top: 4px; }
+.details dt { color: var(--ink-faint); }
+.details dd { margin: 0; word-break: break-all; }
+input.rename { width: 100%; box-sizing: border-box; height: 26px; padding: 0 10px; border: 0; border-radius: 999px; outline: 2px solid var(--accent); background: var(--field); color: var(--ink); font: 600 13px inherit; }
+
+/* Windows 11: Mica window with Windows' own caption buttons; Fluent corners and controls. */
+html.win body { font-size: 14px; }
+html.win header { padding-top: 48px; background: none; }
+html.win header::before { content: 'Pin Manager'; position: absolute; top: 12px; left: 0; color: var(--ink-soft); font-size: 12px; }
+html.win h1 { font: 600 28px/1.2 var(--font-display); }
+html.win h2 { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--ink); }
+html.win .note { border-radius: var(--r-card); }
+html.win .row { border-radius: var(--r-card); }
+html.win button { height: 32px; border-radius: var(--r-control); background: var(--field); font-weight: 400; font-size: 13px; transition: background 83ms linear; }
+html.win button.primary { background: var(--accent); }
+html.win input.rename { border-radius: var(--r-control); outline: 0; box-shadow: inset 0 -2px 0 var(--accent); background: var(--field-active); }
+
+/* Same readable width as Settings: rows stop at 1000px in a maximized window. */
+html.win #main { max-width: 1000px; }
+.agent-items { grid-column: 1 / -1; padding-left: 28px; }
+.agent-items .row { margin-top: 4px; grid-template-columns: 1fr auto; }

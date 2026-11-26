@@ -1,0 +1,35 @@
+name: Problem report
+description: Something does not work in Talaria. The version tells us which release to fix or skip.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Talaria version
+      description: Settings, About, or the menu bar icon (for example 0.3.0). "Report a problem" in Settings fills this in.
+      placeholder: 0.3.0
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: macOS version and Mac (Apple silicon or Intel)
+      placeholder: macOS 15.2, Apple silicon
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen again
+      placeholder: "1. Press the hotkey\n2. ..."
+  - type: dropdown
+    id: since
+    attributes:
+      label: Did it work in an earlier version?
+      options: ["I don't know", 'Yes, it broke in this version', 'No, it never worked']

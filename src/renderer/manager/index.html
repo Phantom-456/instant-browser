@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'" />
+    <title>Talaria Manage</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="top">
+        <div><h1>Manage</h1><p id="summary"></p></div>
+        <input id="search" type="search" placeholder="Search everything" aria-label="Search pins, bookmarks, history and tabs" autocomplete="off" spellcheck="false" />
+      </div>
+      <nav id="tabs" aria-label="Sections"></nav>
+    </header>
+    <main id="main"></main>
+    <div id="toast" role="status" aria-live="polite" hidden><span id="toast-text"></span><button id="toast-undo" type="button">Undo</button></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

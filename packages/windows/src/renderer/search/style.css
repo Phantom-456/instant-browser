@@ -1,0 +1,79 @@
+@import '../shared/glass.css';
+
+/* The window itself is the glass (macOS blur). This page only draws the content, edge to edge. */
+html, body { background: transparent; overflow: hidden; }
+#card { height: 100%; background: var(--sheen); }
+#card.enter { animation: rise 260ms var(--ease); }
+@keyframes rise { from { opacity: 0; transform: translateY(6px) scale(0.985); } }
+
+#field { display: flex; align-items: center; gap: 12px; height: 60px; padding: 0 22px; }
+#glass { display: grid; place-items: center; flex: none; width: 28px; height: 28px; margin: 0 -4px 0 -6px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink-faint); cursor: default; transition: color 200ms var(--ease), transform 300ms var(--ease), background 200ms var(--ease); }
+#glass.clear:hover { background: var(--hover); color: var(--ink); }
+#glass.clear:active { transform: scale(0.9); }
+#glass svg { width: 21px; height: 21px; }
+#field:focus-within #glass { color: var(--accent); transform: scale(1.08); }
+#query {
+  flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; color: var(--ink);
+  font: 400 19px/1 var(--font-display); caret-color: var(--accent);
+}
+#query::placeholder { color: var(--ink-faint); }
+
+#results { max-height: 460px; padding: 4px 8px 10px; overflow-y: auto; border-top: 1px solid var(--edge); scrollbar-width: none; }
+#results::-webkit-scrollbar { display: none; }
+.group { padding-top: 6px; animation: item 300ms var(--ease) backwards; animation-delay: calc(var(--g) * 50ms); }
+.group h2 { margin: 0; padding: 6px 14px 6px; color: var(--ink-faint); font-size: 12px; font-weight: 600; }
+
+/* Bubbles: quick settings and recent searches */
+.bubbles { display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 10px 6px; }
+.bubble {
+  display: inline-flex; align-items: center; gap: 7px; height: 32px; max-width: 100%; padding: 0 14px 0 11px; border: 0; border-radius: 999px;
+  background: var(--hover); color: var(--ink); font: 500 13.5px/1 inherit; white-space: nowrap; cursor: default;
+  box-shadow: inset 0 0 0 1px var(--edge);
+  transition: background 160ms var(--ease), transform 220ms var(--ease), box-shadow 160ms var(--ease);
+  animation: item 300ms var(--ease) backwards; animation-delay: calc(var(--i) * 20ms);
+}
+.bubble .ico { display: grid; flex: none; color: var(--ink-soft); }
+.bubble .ico svg { width: 15px; height: 15px; }
+.bubble .label { overflow: hidden; text-overflow: ellipsis; }
+.bubble:hover { background: var(--accent-soft); transform: translateY(-1px) scale(1.035); }
+.bubble.on { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.bubble:hover .ico, .bubble.on .ico { color: var(--accent); }
+
+/* Rows: suggestions, history searches, visited pages */
+.rows { margin: 0; padding: 0; list-style: none; }
+.row {
+  display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 14px; border-radius: 12px; font-size: 15px; white-space: nowrap; cursor: default;
+  transition: background 140ms var(--ease), transform 200ms var(--ease);
+  animation: item 280ms var(--ease) backwards; animation-delay: calc(var(--i) * 22ms);
+}
+.row .ico { display: grid; flex: none; color: var(--ink-faint); transition: color 140ms var(--ease); }
+.row .ico svg { width: 17px; height: 17px; }
+.row .label { flex: none; max-width: 62%; overflow: hidden; text-overflow: ellipsis; }
+.row .sub { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink-faint); font-size: 13px; }
+.row .tags { display: flex; flex: none; gap: 6px; margin-left: auto; }
+.tag { padding: 3px 9px; border-radius: 999px; background: var(--hover); color: var(--ink-soft); font-size: 11px; font-weight: 500; }
+.row:hover { background: var(--hover); transform: translateX(2px); }
+.row.on { background: var(--accent-soft); }
+.row:hover .ico, .row.on .ico { color: var(--accent); }
+@keyframes item { from { opacity: 0; transform: translateY(5px); } }
+
+/*
+ * Windows 11: the window is an acrylic flyout with 8px corners drawn by the system.
+ * Rows are 4px rounded and do not slide; the bubbles stay pills, like the Start menu's search filters.
+ */
+/* A tint over the acrylic, as Windows flyouts have: windows and text behind the bar stay a soft blur instead of showing through. */
+html.win #card { background: var(--tint); }
+html.win #field { height: 60px; padding: 0 20px; }
+html.win #query { font-size: 18px; }
+html.win #glass { border-radius: var(--r-control); }
+html.win #glass svg { width: 19px; height: 19px; }
+html.win #results { padding: 4px 6px 8px; }
+html.win .group h2 { padding: 8px 12px 4px; font-weight: 600; }
+html.win .row { height: 40px; padding: 0 12px; border-radius: var(--r-row); font-size: 14px; transition: background 83ms linear; }
+html.win .row:hover { transform: none; }
+html.win .row.on { position: relative; background: var(--hover); }
+/* Fluent list selection: a short accent bar on the left of the selected row */
+html.win .row.on::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 2px; background: var(--accent); }
+html.win .row .sub { font-size: 12px; }
+html.win .bubble { font-size: 13px; }
+html.win .bubble:hover { transform: none; }

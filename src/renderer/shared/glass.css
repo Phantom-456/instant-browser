@@ -1,0 +1,65 @@
+/*
+ * Shared look for all our own pages. A web approximation of Apple's Liquid Glass:
+ * the real blur comes from the macOS window (vibrancy); these styles add the soft edges, light and motion.
+ * One accent colour. One shape rule: controls are pills, cards are 16px.
+ */
+:root {
+  color-scheme: light dark;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Candy pink to blue, used everywhere: one accent, one gradient, one slow movement. */
+  --accent: hsl(262 78% 58%);
+  --accent-soft: hsl(262 90% 62% / 0.14);
+  --arc: linear-gradient(100deg, hsl(212 92% 62%), hsl(268 82% 68%), hsl(330 88% 68%), hsl(268 82% 68%), hsl(212 92% 62%));
+  --ink: #1d1d1f;
+  --ink-soft: rgba(29, 29, 31, 0.62);
+  --ink-faint: rgba(29, 29, 31, 0.4);
+  --hover: rgba(0, 0, 0, 0.07);
+  --press: rgba(0, 0, 0, 0.12);
+  --field: rgba(255, 255, 255, 0.72);
+  --edge: rgba(0, 0, 0, 0.1);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+  --danger: #d4372c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent: hsl(266 95% 77%);
+    --accent-soft: hsl(266 95% 70% / 0.22);
+    --ink: #f5f5f7;
+    --ink-soft: rgba(245, 245, 247, 0.66);
+    --ink-faint: rgba(245, 245, 247, 0.4);
+    --hover: rgba(255, 255, 255, 0.1);
+    --press: rgba(255, 255, 255, 0.17);
+    --field: rgba(255, 255, 255, 0.1);
+    --edge: rgba(255, 255, 255, 0.14);
+    --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+    --danger: #ff6a5f;
+  }
+}
+/* Light mode: plain glass over a bright window looks grey and washed out. Here it is frosted paper instead: a soft
+   lavender-blue tint over the blur, solid white cards, hairline edges and a violet-tinted lift. Dark mode is unchanged. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --paper: linear-gradient(165deg, rgba(251, 248, 255, 0.9), rgba(241, 246, 255, 0.88));
+    --field: rgba(255, 255, 255, 0.96);
+    --edge: rgba(40, 40, 90, 0.1);
+    --bar: rgba(251, 249, 255, 0.88);
+    --lift: 0 1px 2px rgba(40, 30, 110, 0.06), 0 8px 22px rgba(70, 50, 150, 0.08);
+    --ink-soft: rgba(29, 29, 45, 0.68);
+    --ink-faint: rgba(29, 29, 45, 0.46);
+  }
+  html:root { background: var(--paper); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --field: Canvas; --paper: Canvas; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+/* The moving candy gradient. Put class "arc" on anything that should carry it; it flows slowly and stops for reduced motion. */
+.arc, button.primary, .modal-buttons .primary, input[type=checkbox]:checked { background: var(--arc); background-size: 200% 100%; animation: arcflow 10s linear infinite; }
+@keyframes arcflow { to { background-position: 200% 0; } }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+svg { display: block; }
+[hidden] { display: none !important; }

@@ -1,0 +1,126 @@
+name: Windows check
+
+# The Windows package: its own codebase in packages/windows. It is checked on its own, so a Windows problem never hides
+# the state of the Mac package, and a change that only touches the Mac code does not start it.
+# The type check and unit tests run first. Then, in parallel: every app test (Playwright, the real app on a Windows
+# desktop), and the installer (built, installed, registration checked, uninstalled).
+on:
+  push:
+    branches: [main]
+    paths: ['packages/windows/**', '.github/workflows/check-windows.yml']
+  pull_request:
+    paths: ['packages/windows/**', '.github/workflows/check-windows.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: packages/windows
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: packages/windows/package.json # the pnpm version comes from "packageManager" there
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: packages/windows/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  smoke:
+    runs-on: windows-latest
+    needs: windows
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: packages/windows/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: packages/windows/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm exec playwright test --reporter=list --trace off
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-smoke-results
+          path: packages/windows/test-results
+          if-no-files-found: ignore
+
+  # The installer: it builds, installs for this user without questions, registers the app as a web browser for
+  # Default apps, and the uninstaller removes it all again.
+  installer:
+    runs-on: windows-latest
+    needs: windows
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: packages/windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: packages/windows/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: packages/windows/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dist:win:release
+      - name: Install, check the registration, uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Get-ChildItem dist.noindex -Filter 'Talaria-*-win-x64.exe' | Select-Object -First 1
+          if (-not $setup) { throw 'installer not found' }
+          $dir = Join-Path $env:RUNNER_TEMP 'ib-install'
+          Start-Process -Wait -FilePath $setup.FullName -ArgumentList '/S', '/currentuser', "/D=$dir"
+          $exe = Join-Path $dir 'Instant Browser.exe'
+          if (-not (Test-Path $exe)) { throw "app not installed at $exe" }
+          $cmd = (Get-ItemProperty 'HKCU:\Software\Classes\InstantBrowserURL\shell\open\command').'(default)'
+          if ($cmd -ne "`"$exe`" --single-argument %1") { throw "wrong link command: $cmd" }
+          $cap = (Get-ItemProperty 'HKCU:\Software\RegisteredApplications').'Instant Browser'
+          if ($cap -ne 'Software\Clients\StartMenuInternet\Instant Browser\Capabilities') { throw "not registered: $cap" }
+          $https = (Get-ItemProperty 'HKCU:\Software\Clients\StartMenuInternet\Instant Browser\Capabilities\URLAssociations').https
+          if ($https -ne 'InstantBrowserURL') { throw "https not offered: $https" }
+          Write-Host "Installed and registered: $exe"
+          # A crafted link with a quote must stay one address: run the registered command the way Windows does
+          # (%1 replaced by the raw link) and check that the switch hidden in it did nothing.
+          $probe = Join-Path $env:RUNNER_TEMP 'ib-injected'
+          $link = "https://example.invalid/`" --user-data-dir=`"$probe"
+          $p = Start-Process -FilePath $exe -ArgumentList "--single-argument $link" -PassThru
+          Start-Sleep -Seconds 8
+          Get-Process -Name 'Instant Browser' -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 2
+          if (Test-Path $probe) { throw "a switch inside the link was used: $probe exists" }
+          Write-Host 'A link with a quote stayed one argument'
+          # For the record (not a failure): the old form, "%1", with the same link.
+          $probe2 = Join-Path $env:RUNNER_TEMP 'ib-injected-old'
+          $link2 = "https://example.invalid/`" --user-data-dir=`"$probe2"
+          Start-Process -FilePath $exe -ArgumentList "`"$link2`"" | Out-Null
+          Start-Sleep -Seconds 8
+          Get-Process -Name 'Instant Browser' -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 2
+          Write-Host "Old form (quoted %1): switch inside the link used = $(Test-Path $probe2)"
+          $uninstaller = Get-ChildItem $dir -Filter 'Uninstall*.exe' | Select-Object -First 1
+          Start-Process -Wait -FilePath $uninstaller.FullName -ArgumentList '/S', '/currentuser'
+          Start-Sleep -Seconds 5 # the uninstaller copies itself and finishes in the background
+          if (Test-Path 'HKCU:\Software\Classes\InstantBrowserURL') { throw 'link handler left behind' }
+          if (Test-Path 'HKCU:\Software\Clients\StartMenuInternet\Instant Browser') { throw 'browser entry left behind' }
+          if ((Get-ItemProperty 'HKCU:\Software\RegisteredApplications' -ErrorAction SilentlyContinue).'Instant Browser') { throw 'registration left behind' }
+          Write-Host 'Uninstalled cleanly'

@@ -1,0 +1,38 @@
+appId: io.github.phantom-456.instantbrowser
+productName: Talaria
+copyright: Talaria
+directories:
+  # The name ends with .noindex so Spotlight does not list the app copies in it.
+  output: dist.noindex
+  buildResources: build
+files:
+  - out/**
+  - resources/**
+  - package.json
+# The licence files travel inside every build.
+extraResources:
+  - { from: LICENSE, to: LICENSE }
+  - { from: NOTICE, to: NOTICE }
+  - { from: THIRD_PARTY_NOTICES.md, to: THIRD_PARTY_NOTICES.md }
+protocols:
+  - name: Web address
+    schemes: [http, https]
+
+# Shared settings for both platforms. The Mac and Windows packages have their own files:
+#   electron-builder.mac.yml  (Mac: dmg, zip, signing, notarizing)
+#   electron-builder.win.yml  (Windows: installer)
+# Where updates come from. electron-updater reads the GitHub Releases of this repository.
+publish:
+  - provider: github
+    owner: Phantom-456
+    repo: instant-browser
+    releaseType: release
+
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  resetAdHocDarwinSignature: true
