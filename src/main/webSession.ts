@@ -45,6 +45,13 @@ export function initWebSession(deps: { settings: SettingsFile; permissions: Perm
 
   // Permission prompt. Anything not in PROMPT_PERMISSIONS is denied without asking.
   ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+    // Full screen for a video or a game, as in every browser: no question. The window can go full screen only while a
+    // page asks (miniWindow.ts turns it off again when the page leaves full screen, so the green button keeps zooming).
+    // Denied, Electron drops the request and the page waits for ever (YouTube's button did nothing).
+    if (permission === 'fullscreen') {
+      windowOf(wc)?.setFullScreenable(true)
+      return callback(true)
+    }
     const origin = originOf(details.requestingUrl || wc.getURL())
     if (!origin || !PROMPT_PERMISSIONS.includes(permission)) return callback(false)
     const keys = permissionKeys(permission, 'mediaTypes' in details ? details.mediaTypes : undefined)
@@ -67,6 +74,7 @@ export function initWebSession(deps: { settings: SettingsFile; permissions: Perm
     })
   })
   ses.setPermissionCheckHandler((_wc, permission, requestingOrigin, details) => {
+    if (permission === 'fullscreen') return true
     const origin = originOf(requestingOrigin)
     const type = details.mediaType === 'audio' || details.mediaType === 'video' ? [details.mediaType] : undefined
     return !!origin && savedDecision(permissions.list(), origin, permissionKeys(permission, type)) === 'allow'

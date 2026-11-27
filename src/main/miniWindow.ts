@@ -378,9 +378,16 @@ export class MiniWindowManager {
     win.contentView.addChildView(page)
     win.contentView.addChildView(toolbar)
 
+    // A page in full screen (a video): the page fills the whole window, without our toolbar and frame.
+    let pageFullScreen = false
     const layout = () => {
       const { width, height } = win.getContentBounds()
       toolbar.setBounds({ x: 0, y: 0, width, height: TOOLBAR_HEIGHT })
+      if (pageFullScreen) {
+        page.setBounds({ x: 0, y: 0, width, height })
+        mini.preview?.setBounds({ x: 0, y: 0, width, height })
+        return
+      }
       const pageBounds = {
         x: FRAME,
         y: TOOLBAR_HEIGHT,
@@ -399,6 +406,31 @@ export class MiniWindowManager {
     this.byToolbarId.set(toolbarId, mini)
 
     layout()
+    // Full screen asked by the page (webSession.ts allows it and lets the window go full screen). Esc or the page's own
+    // button leaves it; Electron then puts the window back at its old size and place.
+    page.webContents.on('enter-html-full-screen', () => {
+      pageFullScreen = true
+      toolbar.setVisible(false)
+      page.setBorderRadius(0)
+      layout()
+    })
+    page.webContents.on('leave-html-full-screen', () => {
+      pageFullScreen = false
+      toolbar.setVisible(true)
+      page.setBorderRadius(12)
+      layout()
+    })
+    win.on('enter-full-screen', () => layout())
+    win.on('leave-full-screen', () => {
+      if (process.platform === 'darwin') win.setFullScreenable(false) // the green button zooms again, as in a small utility window
+      // The window can leave full screen without the page (Esc, the green button, the system): the page must follow,
+      // or it keeps its full-screen layout in a small window. Asked always, not only while pageFullScreen: Esc pressed
+      // during the macOS animation gives the page its 'leave' first, and the document then stays in full screen.
+      if (!page.webContents.isDestroyed()) {
+        void page.webContents.executeJavaScript('document.fullscreenElement && document.exitFullscreen()').catch(() => {})
+      }
+      layout()
+    })
     win.on('resize', () => {
       layout()
       // Remember the size the user chose. Not when we place the window ourselves, and not for a hidden window.

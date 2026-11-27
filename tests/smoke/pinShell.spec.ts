@@ -25,7 +25,7 @@ type Pins = {
   pollHoverAt(p: { x: number; y: number }, now?: number): void
   windowOf(id: string): { centrePoint: { x: number; y: number }; debug(): { phase: string } }
   offload(id: string, o: { ask: boolean }): Promise<{ ok: boolean }>
-  shellDebug(id: string): { mode: string; views: number; paints: number; draws: number; imageSize: { width: number; height: number } | null; windowSize: { width: number; height: number } } | null
+  shellDebug(id: string): { mode: string; views: number; paints: number; draws: number; icon: string; imageSize: { width: number; height: number } | null; windowSize: { width: number; height: number } } | null
   shellWatch(): { shells: number; resumeListeners: number; displayListeners: number; pictures: number; pictureDraws: number }
   refreshShells(): void
 }
@@ -72,6 +72,8 @@ test('a released pin has no page process until the pointer is on it, and gives i
   expect(look?.views).toBe(1)
   expect(look?.imageSize).toEqual(look?.windowSize)
   expect(look!.windowSize.width).toBeGreaterThan(10)
+  // This page has no icon, so the resting pin shows the pin glyph (not an empty pink dot).
+  expect(look?.icon).toBe('glyph')
   // After a wake-up the shell draws itself again; the system listeners are shared by all shells (one each, not one per pin).
   const before = look!.paints
   await app.evaluate(() => (globalThis as unknown as { __pins: Pins }).__pins.refreshShells())

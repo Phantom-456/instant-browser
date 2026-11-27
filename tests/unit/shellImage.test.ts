@@ -12,17 +12,16 @@ const pixel = (img: { width: number; data: Buffer }, x: number, y: number) => {
 }
 
 describe('released pin picture (shell)', () => {
-  it('has the size of the old shell: the disc plus a little room, and the dot as before', () => {
+  it('has the size of the old shell (the disc plus a little room), a thin ring and room for an icon', () => {
     const look = shellLook(30, gradient)
     expect(look.size).toBe(30 + SHELL_PAD * 2)
     expect(look.disc.diameter).toBe(30)
-    expect(look.dot.diameter).toBe(11) // round(30 * 0.36)
-    expect(shellLook(10, gradient).dot.diameter).toBe(6) // never smaller than 6 points
-    expect(look.disc.colour.a).toBeCloseTo(0.34)
-    expect(look.dot.colour.a).toBeCloseTo(0.95)
-    // the dot is the pink end, the disc the blue end
-    expect(look.dot.colour.r).toBeGreaterThan(look.dot.colour.b)
-    expect(look.disc.colour.b).toBeGreaterThan(look.disc.colour.r)
+    expect(look.ring.width).toBeGreaterThanOrEqual(1.5)
+    expect(look.icon.diameter).toBe(Math.round(30 * 0.56))
+    // the ring runs from the blue end to the pink end; the accent (for the pin glyph) is the blue end, as on a live pin
+    expect(look.ring.from.b).toBeGreaterThan(look.ring.from.r)
+    expect(look.ring.to.r).toBeGreaterThan(look.ring.to.b)
+    expect(look.accent).toEqual({ ...look.ring.from, a: 1 })
   })
 
   for (const scale of [1, 1.5, 2, 3]) {
@@ -47,16 +46,51 @@ describe('released pin picture (shell)', () => {
     })
   }
 
-  it('shows the solid pink dot in the middle and the faint blue disc around it', () => {
+  it('is no longer a pink dot: without an icon the middle is only a faint fill, and the ring is the gradient', () => {
     const img = drawShell(shellLook(30, gradient), 2)
     const mid = pixel(img, img.width / 2, img.height / 2)
-    expect(mid.a).toBeGreaterThanOrEqual(Math.round(0.95 * 255) - 1)
-    expect(mid.r).toBeGreaterThan(mid.b)
-    // half way between the dot and the edge of the disc: faint and blue
-    const ring = pixel(img, Math.round(img.width / 2 + 11 * 2), img.height / 2)
-    expect(ring.a).toBeGreaterThan(70)
-    expect(ring.a).toBeLessThan(100) // 0.34 * 255 = 87
-    expect(ring.b).toBeGreaterThan(ring.r)
+    expect(mid.a).toBeGreaterThan(0)
+    expect(mid.a).toBeLessThan(60) // faint, so it never reads as a coloured dot
+    // the ring, on the left and on the right of the circle: solid, blue on one side and pink on the other (135 degrees)
+    const y = img.height / 2
+    const ringAt = (side: -1 | 1) => pixel(img, Math.round(img.width / 2 + side * (15 * 2 - look2.ring.width)), y)
+    const look2 = shellLook(30, gradient)
+    const left = ringAt(-1), right = ringAt(1)
+    expect(left.a).toBeGreaterThan(200)
+    expect(right.a).toBeGreaterThan(200)
+    expect(left.b - left.r).toBeGreaterThan(right.b - right.r) // bluer on the left, pinker on the right
+  })
+
+  const square = (size: number, bgra: [number, number, number, number]) => {
+    const data = Buffer.alloc(size * size * 4)
+    for (let i = 0; i < data.length; i += 4) data.set(bgra, i)
+    return { width: size, height: size, data }
+  }
+
+  it('shows the website icon in the middle when there is one', () => {
+    const red = square(16, [0, 0, 255, 255]) // premultiplied blue, green, red, alpha: solid red
+    const img = drawShell(shellLook(30, gradient), 2, red)
+    const mid = pixel(img, img.width / 2, img.height / 2)
+    expect(mid).toEqual({ r: 255, g: 0, b: 0, a: 255 })
+    // the icon stays inside its square (56% of the pin): just outside it, only the faint fill
+    const beside = pixel(img, Math.round(img.width / 2 + (30 * 0.56 * 2) / 2 + 3), img.height / 2)
+    expect(beside.a).toBeLessThan(60)
+  })
+
+  it('falls back to the pin glyph, drawn in the accent colour (a mask: only its alpha is used)', () => {
+    const white = square(8, [255, 255, 255, 255])
+    const look = shellLook(30, gradient)
+    const img = drawShell(look, 2, { ...white, mask: true })
+    const mid = pixel(img, img.width / 2, img.height / 2)
+    expect(mid.a).toBe(255)
+    expect(Math.abs(mid.r - Math.round(look.accent.r))).toBeLessThanOrEqual(1)
+    expect(Math.abs(mid.b - Math.round(look.accent.b))).toBeLessThanOrEqual(1)
+  })
+
+  it('never throws on an empty or odd icon: it is left out', () => {
+    for (const bad of [{ width: 0, height: 0, data: Buffer.alloc(0) }, { width: 4, height: 4, data: Buffer.alloc(3) }]) {
+      expect(() => drawShell(shellLook(30, gradient), 2, bad)).not.toThrow()
+    }
   })
 
   it('is premultiplied, as nativeImage.createFromBitmap expects: no colour channel is above its alpha', () => {
@@ -72,7 +106,7 @@ describe('released pin picture (shell)', () => {
     const row = img.height / 2
     const alphas = new Set<number>()
     for (let x = 0; x < img.width; x++) alphas.add(pixel(img, x, row).a)
-    expect(alphas.size).toBeGreaterThan(3) // 0, the disc, the dot, and steps in between
+    expect(alphas.size).toBeGreaterThan(3) // 0, the fill, the ring, and steps in between
   })
 
   it('draws for 1x and 2x always, plus any other screen scale, without duplicates or silly values', () => {
@@ -89,6 +123,7 @@ describe('released pin picture (shell)', () => {
     expect(shellKey(look, [1, 2])).not.toBe(shellKey(look, [1, 1.5, 2]))
     const other: GradientSpec = { ...gradient, stops: [gradient.stops[0]!, { h: 10, s: 80, l: 60 }] }
     expect(shellKey(look, [1, 2])).not.toBe(shellKey(shellLook(30, other), [1, 2]))
+    expect(shellKey(look, [1, 2], 'icon-a')).not.toBe(shellKey(look, [1, 2], 'icon-b')) // another icon, another picture
   })
 
   it('never throws on a bad size or a gradient without colours (v8): it draws the usual pin instead', () => {
@@ -98,7 +133,7 @@ describe('released pin picture (shell)', () => {
       expect(() => drawShell(look, 2)).not.toThrow()
     }
     const plain = shellLook(30, { seed: 1, angle: 0, stops: [] })
-    expect(plain.dot.colour.r).toBeGreaterThan(plain.dot.colour.b) // the pink end of the usual pin
+    expect(plain.ring.to.r).toBeGreaterThan(plain.ring.to.b) // the pink end of the usual pin
     expect(() => shellLook(30, undefined as unknown as GradientSpec)).not.toThrow()
   })
 })

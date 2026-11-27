@@ -1,6 +1,47 @@
-import { BaseWindow, ImageView, View, nativeImage, powerMonitor, screen, type NativeImage } from 'electron'
+import { app, BaseWindow, ImageView, View, nativeImage, powerMonitor, screen, type NativeImage } from 'electron'
+import { join } from 'node:path'
 import type { PinRecord, Point } from '../../shared/pins/model'
-import { drawShell, shellKey, shellLook, shellScales, SHELL_PAD } from '../../shared/pins/shellImage'
+import { drawShell, shellKey, shellLook, shellScales, SHELL_PAD, type ShellIcon } from '../../shared/pins/shellImage'
+
+/**
+ * The icon in the middle of a released pin: the website's own icon when Electron can decode it (PNG, JPEG, ICO), or
+ * else the pin glyph (resources/pin-glyph.png, white, used as a mask in the pin's accent colour). Electron cannot
+ * decode SVG here (no page), so an SVG site icon falls back to the pin glyph too (user, 2026-11-27).
+ */
+type IconChoice = { icon: ShellIcon | undefined; key: string; source: 'site' | 'glyph' | 'none' }
+let glyph: ShellIcon | null | undefined
+function pinGlyph(): ShellIcon | null {
+  if (glyph !== undefined) return glyph
+  try {
+    const img = nativeImage.createFromPath(join(app.getAppPath(), 'resources/pin-glyph.png'))
+    const { width, height } = img.getSize()
+    glyph = img.isEmpty() ? null : { width, height, data: img.toBitmap(), mask: true }
+  } catch { glyph = null }
+  return glyph
+}
+const siteIcons = new Map<string, ShellIcon | null>() // by the icon's data URL; a few at most
+function siteIcon(dataUrl: string): ShellIcon | null {
+  if (siteIcons.has(dataUrl)) return siteIcons.get(dataUrl)!
+  let icon: ShellIcon | null = null
+  try {
+    let img = nativeImage.createFromDataURL(dataUrl)
+    if (!img.isEmpty()) {
+      const { width, height } = img.getSize()
+      if (Math.max(width, height) > 128) img = img.resize({ width: 128, height: 128, quality: 'best' })
+      const size = img.getSize()
+      if (size.width > 0 && size.height > 0) icon = { width: size.width, height: size.height, data: img.toBitmap() }
+    }
+  } catch { icon = null }
+  if (siteIcons.size > 32) siteIcons.clear()
+  siteIcons.set(dataUrl, icon)
+  return icon
+}
+function iconFor(record: PinRecord): IconChoice {
+  const site = record.icon ? siteIcon(record.icon) : null
+  if (site) return { icon: site, key: `site:${record.icon!.length}:${record.icon!.slice(-48)}`, source: 'site' }
+  const g = pinGlyph()
+  return g ? { icon: g, key: 'glyph', source: 'glyph' } : { icon: undefined, key: '', source: 'none' }
+}
 
 /** How often every released pin is drawn again, just in case (one timer for all pins, not one each). */
 const HEAL_MS = Number(process.env.INSTANT_TEST_SHELL_HEAL_MS ?? 30_000)
@@ -78,6 +119,7 @@ export class PinShell {
   private destroyed = false
   private paints = 0
   private draws = 0
+  private iconSource: IconChoice['source'] = 'none'
   private cached: { key: string; img: NativeImage } | null = null
   /** The one extra redraw just after show(); cleared when the pin goes, so no timer outlives it. */
   private later: NodeJS.Timeout | null = null
@@ -102,14 +144,16 @@ export class PinShell {
   /** The picture of this pin, drawn for normal and Retina screens (and any other scale a connected screen uses). */
   private image(): NativeImage {
     const look = shellLook(this.diameter(), this.record.gradient)
+    const choice = iconFor(this.record)
+    this.iconSource = choice.source
     let scales = [1, 2]
     try { scales = shellScales(screen.getAllDisplays().map((d) => d.scaleFactor)) } catch { /* no screen module yet: 1 and 2 */ }
-    const key = shellKey(look, scales)
+    const key = shellKey(look, scales, choice.key)
     if (this.cached?.key === key) return this.cached.img // the same look: nothing new to show
     const img = sharedPicture(key, () => {
       let made: NativeImage | null = null
       for (const scaleFactor of scales) {
-        const { width, height, data } = drawShell(look, scaleFactor)
+        const { width, height, data } = drawShell(look, scaleFactor, choice.icon)
         if (!made) made = nativeImage.createFromBitmap(data, { width, height, scaleFactor })
         else made.addRepresentation({ scaleFactor, width, height, buffer: data })
       }
@@ -138,7 +182,7 @@ export class PinShell {
     const dot = look.dot.diameter
     this.dot!.setBounds({ x: Math.round((s - dot) / 2), y: Math.round((s - dot) / 2), width: dot, height: dot })
     this.dot!.setBorderRadius(Math.round(dot / 2))
-    this.dot!.setBackgroundColor(css(look.dot.colour))
+    this.dot!.setBackgroundColor(css({ ...look.accent, a: 0.6 })) // the accent, not the pink end: no pink dot
   }
 
   /** Make the pin look right again: no window colour behind it, and the pin drawn once more. Cheap; safe to call often. */
@@ -175,7 +219,7 @@ export class PinShell {
   }
 
   /** For tests: how the shell is drawn now. */
-  debug(): { mode: 'picture' | 'views'; views: number; paints: number; draws: number; imageSize: { width: number; height: number } | null; windowSize: { width: number; height: number } } {
+  debug(): { mode: 'picture' | 'views'; views: number; paints: number; draws: number; icon: IconChoice['source']; imageSize: { width: number; height: number } | null; windowSize: { width: number; height: number } } {
     const b = this.isDestroyed() ? { width: 0, height: 0 } : this.win.getBounds()
     return {
       windowSize: { width: b.width, height: b.height },
@@ -183,6 +227,7 @@ export class PinShell {
       views: this.isDestroyed() ? 0 : this.win.contentView.children.length,
       paints: this.paints,
       draws: this.draws,
+      icon: this.iconSource,
       imageSize: this.cached ? this.cached.img.getSize() : null
     }
   }
